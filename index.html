@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATC - AllIndia Transport</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="style.css">
+    <!-- PWA Meta Tags -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#003366">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="apple-touch-icon" href="Images/ATC_Logo.png">
+
+<!-- Service Worker Registration -->
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js');
+    });
+  }
+</script>
+</head>
+<body>
+
+    <!-- Sidebar Menu -->
+    <div class="offcanvas offcanvas-start" id="sidebar">
+        <div class="offcanvas-header border-bottom">
+            <h5 class="fw-bold text-primary">ATC MENU</h5>
+            <button class="btn-close" data-bs-dismiss="offcanvas"></button>
+        </div>
+        <div class="offcanvas-body p-0">
+            <div class="list-group list-group-flush">
+                <a href="#" class="list-group-item p-3" onclick="showSection('home')"><i class="bi bi-house-door me-2"></i> Home</a>
+                <a href="#" class="list-group-item p-3" onclick="showSection('new-trip')"><i class="bi bi-plus-circle me-2 text-primary"></i> New Trip Entry</a>
+                <a href="#" class="list-group-item p-3" onclick="showSection('view-trips')"><i class="bi bi-truck me-2 text-warning"></i> View All Trips</a>
+                <a href="#" class="list-group-item p-3" onclick="showSection('accounts')"><i class="bi bi-wallet2 me-2 text-success"></i> Hisaab-Kitaab</a>
+                <a href="#" class="list-group-item p-3" onclick="showSection('vehicles')">
+    <i class="bi bi-card-list me-2 text-info"></i> Gaadi Master (RC)
+</a>
+                <hr>
+                <a href="#" class="list-group-item p-3 text-danger" onclick="location.reload()"><i class="bi bi-arrow-clockwise me-2"></i> Refresh App</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Navbar -->
+    <nav class="navbar navbar-dark bg-primary p-3 shadow-sm sticky-top">
+        <button class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#sidebar">
+            <i class="bi bi-list fs-4"></i>
+        </button>
+        <span class="navbar-brand fw-bold mx-auto">ATC MANAGEMENT</span>
+    </nav>
+
+    <div class="container py-4">
+        
+        <!-- HOME SECTION -->
+        <!-- HOME SECTION -->
+<div id="home-section" class="app-section">
+    <!-- Welcome Header -->
+    <div class="home-header p-4 mb-4 shadow-sm text-white rounded-bottom-4">
+        <h5 id="greetingText">Good Morning,</h5>
+        <h2 class="fw-bold">ATC Management</h2>
+        <p class="small opacity-75 mb-0"><i class="bi bi-geo-alt-fill"></i> ATC TRANSPORT COMPANY</p>
+    </div>
+
+    <!-- Quick Action Grid -->
+    <div class="row g-3 px-2">
+        <div class="col-6">
+            <div class="action-card shadow-sm p-3 text-center border-0 rounded-4 bg-white" onclick="showSection('new-trip')">
+                <div class="icon-box bg-primary-light text-primary mb-2 mx-auto">
+                    <i class="bi bi-plus-lg fs-3"></i>
+                </div>
+                <span class="fw-bold d-block">New Trip</span>
+                <small class="text-muted">Create Entry</small>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="action-card shadow-sm p-3 text-center border-0 rounded-4 bg-white" onclick="showSection('view-trips')">
+                <div class="icon-box bg-warning-light text-warning mb-2 mx-auto">
+                    <i class="bi bi-truck fs-3"></i>
+                </div>
+                <span class="fw-bold d-block">Trips List</span>
+                <small class="text-muted">View History</small>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="action-card shadow-sm p-3 text-center border-0 rounded-4 bg-white" onclick="showSection('accounts')">
+                <div class="icon-box bg-success-light text-success mb-2 mx-auto">
+                    <i class="bi bi-wallet2 fs-3"></i>
+                </div>
+                <span class="fw-bold d-block">Accounts</span>
+                <small class="text-muted">Hisaab-Kitaab</small>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="action-card shadow-sm p-3 text-center border-0 rounded-4 bg-white" onclick="location.reload()">
+                <div class="icon-box bg-info-light text-info mb-2 mx-auto">
+                    <i class="bi bi-arrow-repeat fs-3"></i>
+                </div>
+                <span class="fw-bold d-block">Refresh</span>
+                <small class="text-muted">Sync Data</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Trips Peek -->
+    <div class="mt-4 px-2">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="fw-bold mb-0">Recent Trips</h6>
+            <a href="#" class="small text-decoration-none" onclick="showSection('view-trips')">See All</a>
+        </div>
+        <div id="homeRecentTrips" class="peek-container">
+            <!-- JS se aakhri 3 trips yahan aayengi -->
+            <div class="text-center p-3 text-muted small">Fetching recent data...</div>
+        </div>
+    </div>
+</div>
+
+        <!-- ACCOUNTS SECTION -->
+        <div id="accounts-section" class="app-section hidden">
+            <h4 class="fw-bold mb-3"><i class="bi bi-pie-chart-fill me-2 text-success"></i>Hisaab-Kitaab</h4>
+            <div class="card shadow-sm border-0 mb-3 text-white p-3" style="background: linear-gradient(45deg, #003366, #0056b3);">
+                <small class="opacity-75">Total Business Value</small>
+                <h2 id="acc-total-business" class="fw-bold">₹0</h2>
+            </div>
+            <div class="row g-2 mb-4">
+                <div class="col-6">
+                    <div class="card shadow-sm border-0 bg-danger text-white p-3">
+                        <small class="opacity-75">Total Pending</small>
+                        <h4 id="acc-total-pending" class="mb-0 fw-bold">₹0</h4>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card shadow-sm border-0 bg-success text-white p-3">
+                        <small class="opacity-75">Total Received</small>
+                        <h4 id="acc-total-received" class="mb-0 fw-bold">₹0</h4>
+                    </div>
+                </div>
+            </div>
+            <h6 class="fw-bold border-bottom pb-2 mb-3">Money Received By (Collector List)</h6>
+            <div id="collector-list" class="list-group shadow-sm">
+                <!-- Collector data yahan aayega -->
+            </div>
+        </div>
+
+        <!-- NEW TRIP FORM SECTION -->
+        <div id="new-trip-section" class="app-section hidden">
+            <div class="entry-card shadow-lg p-4">
+                <div class="entry-header">Entry Form</div>
+                <form id="tripForm">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label>Date</label>
+                            <input type="date" id="date" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label>Vehicle No</label>
+                            <input type="text" id="vNo" class="form-control" placeholder="RJ 14 XX 0000">
+                        </div>
+                        <div class="col-md-6">
+                            <label>Party Name</label>
+                            <input type="text" id="partyName" class="form-control" placeholder="Party Name">
+                        </div>
+                        <div class="col-md-6">
+                            <label>Material</label>
+                            <input type="text" id="material" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                            <label>From</label>
+                            <input type="text" id="from" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                            <label>To</label>
+                            <input type="text" id="to" class="form-control">
+                        </div>
+                        <div class="col-4">
+                            <label>Rate</label>
+                            <input type="number" id="rate" class="form-control">
+                        </div>
+                        <div class="col-4">
+                            <label>Capacity</label>
+                            <input type="number" id="capacity" class="form-control">
+                        </div>
+                        <div class="col-4">
+                            <label>Amount</label>
+                            <input type="number" id="amount" class="form-control" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label>Received Status</label>
+                            <select id="received" class="form-select">
+                                <option value="No">❌ Pending</option>
+                                <option value="Yes">✅ Received</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label>Driver No</label>
+                            <input type="text" id="dNo" class="form-control">
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <label>Remark</label>
+                        <textarea id="remark" class="form-control" rows="2"></textarea>
+                    </div>
+                    <button type="button" id="submitBtn" class="btn btn-success btn-lg w-100 mt-4 shadow" onclick="submitTrip()">
+                        SUBMIT TO GOOGLE SHEET
+                    </button>
+                </form>
+            </div>
+        </div>
+
+    <div id="view-trips-section" class="app-section hidden">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="fw-bold">Trip Records</h4>
+        <button class="btn btn-sm btn-outline-primary" onclick="loadTrips()">🔄 Refresh</button>
+    </div>
+    
+    <!-- Simplified Top Summary Bar (No Amounts) -->
+    <div id="tripSummaryBar" class="hidden d-flex align-items-center justify-content-around shadow-sm mb-3">
+        <div class="summary-item text-center flex-fill">
+            <small class="opacity-75 d-block">Total Trips</small>
+            <b id="sumCount" class="fs-5 text-white">0</b>
+        </div>
+        <div class="summary-item text-center flex-fill border-start border-end">
+            <small class="opacity-75 d-block">Collected</small>
+            <b id="sumColCount" class="fs-5 text-success">0</b>
+        </div>
+        <div class="summary-item text-center flex-fill">
+            <small class="opacity-75 d-block">Pending</small>
+            <b id="sumPenCount" class="fs-5 text-danger">0</b>
+        </div>
+    </div>
+
+    <input type="text" id="tripSearch" class="form-control mb-3 shadow-sm rounded-pill" placeholder="🔍 Search Anything..." onkeyup="filterTrips()">
+    
+    <div id="tripCardsContainer"></div>
+</div>
+
+    <!-- VEHICLE MASTER SECTION (Yeh missing tha) -->
+<div id="vehicles-section" class="app-section hidden">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="fw-bold"><i class="bi bi-card-list me-2 text-info"></i>Vehicle Master</h4>
+        <button class="btn btn-sm btn-outline-info" onclick="loadVehicles()">🔄 Refresh</button>
+    </div>
+    <input type="text" id="vSearch" class="form-control mb-3 shadow-sm border-info" placeholder="🔍 Search RC Number..." onkeyup="filterVehicles()">
+    <div id="vehicleCardsContainer">
+        <!-- Data load yahan hoga -->
+        <div class="text-center p-5 text-muted">Click refresh to load vehicles...</div>
+    </div>
+</div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

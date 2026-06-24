@@ -1,0 +1,506 @@
+:root {
+    --primary: #003366;
+    --accent: #28a745;
+}
+
+body { background-color: #f4f7f9; font-family: 'Segoe UI', sans-serif; }
+.hidden { display: none; }
+.navbar { background: var(--primary) !important; }
+
+/* Dashboard Buttons */
+.btn-white { background: white; color: #333; font-weight: 600; transition: 0.3s; }
+.btn-white:hover { background: #f8f9fa; transform: translateY(-3px); }
+
+/* Form Design */
+.entry-card { background: #fff; border-radius: 15px; border-top: 6px solid var(--primary); }
+.entry-header { 
+    background: #eaffea; 
+    color: #28a745; 
+    text-align: center; 
+    font-weight: 800; 
+    font-size: 24px; 
+    font-style: italic;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    padding: 5px;
+}
+
+label { font-size: 13px; font-weight: bold; color: #555; margin-bottom: 2px; }
+
+/* Trip Cards Styling */
+.trip-card {
+    background: white;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 15px;
+    border-left: 6px solid #ccc;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.status-no { border-left-color: #dc3545 !important; background-color: #fffafa; }
+.status-yes { border-left-color: #28a745 !important; background-color: #fafffa; }
+
+.details-grid {
+    background-color: #f8f9fa;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    margin-top: 10px;
+    padding: 10px;
+}
+
+.trip-amount { font-size: 1.2rem; font-weight: 800; color: var(--primary); }
+
+/* Home Header Gradient */
+.home-header {
+    background: linear-gradient(135deg, #003366 0%, #0056b3 100%);
+    margin: -24px -12px 20px -12px; /* Pull header to edges */
+}
+
+/* Action Cards */
+.action-card {
+    cursor: pointer;
+    transition: 0.2s;
+}
+.action-card:hover { transform: translateY(-5px); }
+
+.icon-box {
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 18px;
+}
+
+/* Light Backgrounds for icons */
+.bg-primary-light { background: #e7f1ff; }
+.bg-warning-light { background: #fff8e1; }
+.bg-success-light { background: #e8f5e9; }
+.bg-info-light { background: #e0f7fa; }
+
+/* Peek Trip Card */
+.peek-card {
+    background: white;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 10px;
+    border-left: 4px solid var(--primary);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* ATC Official Vehicle Identity Card */
+.atc-id-card {
+    background: #ffffff;
+    border-radius: 20px;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid #e0e0e0;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.08);
+    margin-bottom: 25px;
+}
+
+/* Card ka Blue Header (Hologram look) */
+.atc-card-header {
+    background: linear-gradient(135deg, #003366 0%, #0056b3 100%);
+    padding: 15px;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.atc-card-header h4 {
+    margin: 0;
+    letter-spacing: 2px;
+    font-weight: 800;
+}
+
+.atc-card-body {
+    padding: 20px;
+    background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+}
+
+/* Data Sections */
+.data-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    color: #888;
+    font-weight: 700;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.data-value {
+    font-size: 13px;
+    color: #222;
+    font-weight: 600;
+    display: block;
+}
+
+/* Bank Details Box */
+.bank-box {
+    background: #fff3cd; /* Light Golden */
+    border: 1px dashed #ffc107;
+    border-radius: 10px;
+    padding: 10px;
+    margin-top: 15px;
+}
+
+/* Official Stamp Look */
+.official-stamp {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    opacity: 0.1;
+    font-size: 50px;
+    transform: rotate(-20deg);
+}
+
+.doc-btn-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.btn-upload {
+    background-color: #f8f9fa;
+    border: 1px dashed #0dcaf0;
+    color: #0dcaf0;
+    flex: 1;
+    font-size: 12px;
+}
+
+.btn-view-doc {
+    background-color: #0dcaf0;
+    color: white;
+    flex: 1;
+    font-size: 12px;
+}
+
+/* Simple Vehicle List Style */
+.v-list-item {
+    background: white;
+    border-radius: 12px;
+    margin-bottom: 10px;
+    border: 1px solid #eee;
+    overflow: hidden;
+    transition: 0.3s;
+}
+
+.v-item-header {
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.v-item-header:hover { background: #f8f9fa; }
+
+.v-item-details {
+    padding: 0 15px 15px 15px;
+    border-top: 1px dashed #eee;
+    background: #fafafa;
+}
+
+.btn-group-custom {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.doc-link-item {
+    display: block;
+    padding: 8px;
+    background: #eef2f7;
+    margin-top: 5px;
+    border-radius: 5px;
+    font-size: 12px;
+    text-decoration: none;
+    color: #003366;
+    border-left: 3px solid #0dcaf0;
+}
+
+.history-container {
+    background: white;
+    border-radius: 8px;
+    padding: 5px;
+}
+
+.history-item {
+    font-size: 11px;
+}
+
+.history-item:last-child {
+    border-bottom: none !important;
+}
+
+/* Tabs styling for small area */
+.nav-tabs .nav-link {
+    padding: 5px 10px;
+    color: #666;
+}
+.nav-tabs .nav-link.active {
+    font-weight: bold;
+    color: var(--primary);
+}
+
+.v-item-details {
+    transition: all 0.3s ease;
+}
+
+#vehicleCardsContainer .badge {
+    font-weight: 500;
+}
+
+/* --- PREMIUM TRIP CARDS (View All Trips) --- */
+.trip-card {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 18px;
+    border: none;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s;
+}
+
+.trip-card:active { transform: scale(0.98); }
+
+/* Left Status Border */
+.status-indicator {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+}
+.bg-success-indicator { background: #20c997; }
+.bg-danger-indicator { background: #ff4d4d; }
+
+.trip-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.trip-vno {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #1a202c;
+    letter-spacing: 0.5px;
+}
+
+.trip-route {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #f8fafc;
+    padding: 10px;
+    border-radius: 12px;
+    margin: 10px 0;
+}
+
+.route-dot { height: 8px; width: 8px; background: #cbd5e1; border-radius: 50%; }
+
+/* --- VEHICLE MASTER IMPROVEMENTS --- */
+.v-stats-card {
+    background: white;
+    border: 1px solid #edf2f7;
+    border-radius: 12px;
+    padding: 10px;
+    text-align: center;
+}
+
+.v-stats-label { font-size: 10px; color: #718096; text-transform: uppercase; font-weight: 700; }
+.v-stats-value { font-size: 14px; font-weight: 800; color: #2d3748; display: block; }
+
+.history-item-new {
+    background: white;
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 8px;
+    border-left: 3px solid #e2e8f0;
+}
+
+.badge-soft-success { background: #e6fffa; color: #047481; padding: 4px 8px; border-radius: 6px; font-size: 10px; }
+.badge-soft-danger { background: #fff5f5; color: #c53030; padding: 4px 8px; border-radius: 6px; font-size: 10px; }
+
+/* --- ULTIMATE TRIP CARD DESIGN --- */
+.trip-card {
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 18px;
+    margin-bottom: 20px;
+    border: 1px solid #f0f0f0;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.03);
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+/* Timeline design for Route */
+.route-timeline {
+    position: relative;
+    padding-left: 25px;
+    margin: 15px 0;
+}
+
+.route-timeline::before {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 5px;
+    bottom: 5px;
+    width: 2px;
+    border-left: 2px dashed #cbd5e1;
+}
+
+.point {
+    position: absolute;
+    left: 0;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: white;
+    border: 3px solid var(--primary);
+}
+.point-start { top: 0; border-color: #28a745; }
+.point-end { bottom: 0; border-color: #dc3545; }
+
+/* Summary Bar Styling */
+#tripSummaryBar {
+    background: #003366;
+    color: white;
+    border-radius: 15px;
+    padding: 15px;
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 20px;
+    font-size: 13px;
+    box-shadow: 0 4px 12px rgba(0,51,102,0.2);
+}
+
+.action-btn-circle {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f8fafc;
+    color: #64748b;
+    border: none;
+    transition: 0.2s;
+}
+.btn-whatsapp { color: #25D366; background: #e8f5e9; }
+
+/* --- SUMMARY BAR --- */
+#tripSummaryBar {
+    background: #003366;
+    color: white;
+    border-radius: 15px;
+    padding: 12px;
+}
+
+/* --- COLORED TRIP CARDS --- */
+.trip-card {
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 18px;
+    margin-bottom: 20px;
+    border: none;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.03);
+    position: relative;
+    border-left: 8px solid #ccc; /* Default */
+}
+
+.status-collected {
+    background: linear-gradient(to right, #f0fff4, #ffffff) !important;
+    border-left-color: #28a745 !important;
+}
+
+.status-pending {
+    background: linear-gradient(to right, #fff5f5, #ffffff) !important;
+    border-left-color: #dc3545 !important;
+}
+
+/* --- ROUTE TIMELINE --- */
+.route-timeline {
+    position: relative;
+    padding-left: 25px;
+    margin: 12px 0;
+}
+
+.route-timeline::before {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 5px;
+    bottom: 5px;
+    width: 2px;
+    border-left: 2px dashed #cbd5e1;
+}
+
+.point {
+    position: absolute;
+    left: 0;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: white;
+    border: 3px solid #003366;
+}
+.point-start { top: 0; border-color: #28a745; }
+.point-end { bottom: 0; border-color: #dc3545; }
+
+.collector-tag {
+    font-size: 11px;
+    background: rgba(0,0,0,0.05);
+    padding: 2px 8px;
+    border-radius: 5px;
+    display: inline-block;
+    color: #555;
+    margin-top: 4px;
+}
+
+.action-btn-circle {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f8fafc;
+    border: 1px solid #eee;
+    color: #666;
+}
+.btn-whatsapp { color: #25D366; background: #e8f5e9; border: none; }
+
+.overdue-tag {
+    font-size: 9px;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 50px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Animations for old pending trips */
+.bg-danger.overdue-tag {
+    animation: pulse-red 2s infinite;
+}
+
+@keyframes pulse-red {
+    0% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
