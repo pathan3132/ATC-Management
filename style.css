@@ -504,3 +504,243 @@ label { font-size: 13px; font-weight: bold; color: #555; margin-bottom: 2px; }
     50% { opacity: 0.7; }
     100% { opacity: 1; }
 }
+
+/* --- LOCK SCREEN STYLES --- */
+#lock-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #003366 0%, #001a33 100%);
+    z-index: 10000; /* Sabse upar */
+    transition: 0.5s;
+}
+
+.lock-card {
+    background: white;
+    width: 90%;
+    max-width: 350px;
+    border-radius: 25px;
+    border-top: 5px solid #28a745;
+}
+
+#appPin:focus {
+    box-shadow: none;
+    border-color: #003366;
+}
+
+/* Jab login ho jaye toh lock screen gayab karne ke liye */
+.lock-hidden {
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-100%);
+}
+
+/* Full Details Section */
+.trip-details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    background: #f1f5f9;
+    padding: 12px;
+    border-radius: 12px;
+    margin-top: 10px;
+}
+
+.detail-box {
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 5px;
+}
+
+.detail-label {
+    font-size: 9px;
+    color: #64748b;
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+.detail-value {
+    font-size: 11px;
+    color: #1e293b;
+    font-weight: 600;
+    display: block;
+}
+
+.remark-box {
+    grid-column: span 2;
+    background: #fff;
+    padding: 8px;
+    border-radius: 8px;
+    border-left: 3px solid #003366;
+    font-size: 11px;
+    font-style: italic;
+}
+.details-grid {
+    background-color: #fcfcfc;
+    border: 1px solid #eee;
+    border-radius: 10px;
+    padding: 8px 0;
+}
+
+.details-grid span {
+    font-size: 13px;
+    color: var(--primary);
+}
+
+.status-collected {
+    border-left: 8px solid #28a745 !important;
+}
+
+.status-pending {
+    border-left: 8px solid #dc3545 !important;
+}
+
+/* --- NEW PREMIUM LOCK SCREEN STYLES --- */
+/* --- LUXURY LOCK SCREEN DESIGN --- */
+#lock-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: radial-gradient(circle at top, #003366 0%, #001122 100%);
+    z-index: 99999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: 'Segoe UI', sans-serif;
+    overflow: hidden;
+}
+
+.lock-wrapper {
+    width: 100%;
+    max-width: 400px;
+    padding: 20px;
+    text-align: center;
+    position: relative;
+}
+
+/* Avatar Styling with Floating Animation */
+.avatar-box {
+    position: relative;
+    width: 180px;
+    height: 180px;
+    margin: 0 auto 30px;
+}
+
+.main-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    position: relative;
+    z-index: 2;
+    filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5));
+    animation: floating 3s ease-in-out infinite;
+}
+
+.avatar-glow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 120px;
+    height: 120px;
+    background: #00aaff;
+    filter: blur(50px);
+    opacity: 0.3;
+    z-index: 1;
+}
+
+@keyframes floating {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-15px); }
+}
+
+/* Text Styling */
+.welcome-text { margin-bottom: 40px; }
+.greet-title {
+    color: white;
+    font-weight: 800;
+    letter-spacing: 3px;
+    font-size: 24px;
+    margin-bottom: 5px;
+}
+.greet-subtitle {
+    color: #8899aa;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Input Styling */
+#appPin {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+    color: white;
+    text-align: center;
+    font-size: 22px;
+    padding: 15px;
+    width: 100%;
+    letter-spacing: 10px;
+    margin-bottom: 10px;
+    backdrop-filter: blur(10px);
+}
+
+#appPin:focus {
+    outline: none;
+    border-color: #00aaff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Unlock Button */
+.unlock-btn {
+    background: linear-gradient(90deg, #0056b3, #00aaff);
+    border: none;
+    padding: 18px;
+    width: 100%;
+    border-radius: 15px;
+    color: white;
+    font-weight: 700;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 10px 20px rgba(0, 170, 255, 0.3);
+    transition: 0.3s;
+    margin-top: 20px;
+}
+
+.unlock-btn:active { transform: scale(0.95); }
+
+.error-msg {
+    color: #ff4444;
+    font-size: 13px;
+    margin-top: 10px;
+    font-weight: 600;
+}
+
+.copyright {
+    position: absolute;
+    bottom: -60px;
+    left: 0;
+    right: 0;
+    color: rgba(255,255,255,0.2);
+    font-size: 11px;
+}
+
+/* Transition out */
+.lock-hidden {
+    opacity: 0;
+    visibility: hidden;
+    transform: scale(1.2);
+    transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.badge {
+    letter-spacing: 0.5px;
+    padding: 4px 7px;
+    font-weight: 700;
+    text-transform: uppercase;
+}

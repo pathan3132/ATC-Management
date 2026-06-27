@@ -1,3 +1,62 @@
+// --- SECURITY CONFIG ---
+const SECRET_PIN = "2026"; // Aap yahan apna 4-digit PIN set karein
+
+// --- INITIALIZE LOCK STATUS ---
+window.onload = () => {
+    checkLoginStatus();
+    updateGreeting();
+    loadHomeRecent();
+};
+
+// Check if already logged in (Refresh par baar baar lock na dikhe - Optional)
+// Agar aap chahte hain ki har baar app khulte hi lock dikhe, toh localStorage mat use karein
+function checkLoginStatus() {
+    const lockScreen = document.getElementById('lock-screen');
+    // Agar session storage use karenge toh browser close hone tak unlocked rahega
+    if (sessionStorage.getItem('atc_unlocked') === 'true') {
+        lockScreen.classList.add('lock-hidden');
+    }
+}
+
+// PIN Verification
+function verifyPin() {
+    const input = document.getElementById('appPin');
+    const pin = input.value;
+    const errorMsg = document.getElementById('lock-error');
+    const lockScreen = document.getElementById('lock-screen');
+    const lockCard = document.querySelector('.lock-card');
+
+    if (pin === SECRET_PIN) {
+        // Success: Unlock App
+        sessionStorage.setItem('atc_unlocked', 'true');
+        lockScreen.classList.add('lock-hidden');
+        errorMsg.classList.add('hidden');
+    } else {
+        // Fail: Show Error & Shake
+        errorMsg.classList.remove('hidden');
+        input.value = "";
+        lockCard.classList.add('shake');
+        setTimeout(() => lockCard.classList.remove('shake'), 400);
+    }
+}
+
+// Enter Key se bhi unlock ho jaye
+document.addEventListener('keypress', function (e) {
+    if (e.key === 'Enter') {
+        const lockScreen = document.getElementById('lock-screen');
+        if (!lockScreen.classList.contains('lock-hidden')) {
+            verifyPin();
+        }
+    }
+});
+
+// Sidebar se Logout karne ka option (Optional)
+function logout() {
+    if(confirm("Do you want to logout?")) {
+        localStorage.removeItem('atc_logged_in');
+        location.reload();
+    }
+}
 // IS LINE KO SAHI SE CHECK KAREIN - Sirf URL hona chahiye
 const scriptURL = 'https://script.google.com/macros/s/AKfycbzin-51q_OK2kEcEdguAkEhxMQOGgpzuQmyioXL2NTzO4ysvSSZNDXG3pEzw_5wvq46/exec';
 
@@ -127,7 +186,7 @@ function parseSheetDate(dateStr) {
 async function loadTrips() {
     const container = document.getElementById('tripCardsContainer');
     const summaryBar = document.getElementById('tripSummaryBar');
-    container.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary spinner-border-sm"></div></div>';
+    container.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary spinner-border-sm"></div><br>Loading Sheet Data...</div>';
     
     try {
         const response = await fetch(scriptURL);
@@ -135,9 +194,15 @@ async function loadTrips() {
         container.innerHTML = '';
         summaryBar.classList.remove('hidden');
 
+        // --- NAYA LOGIC: Vehicle Counting ---
+        // Pehle hum saari trips ko scan karke count nikalenge
+        const vCountMap = {};
+        data.forEach(t => {
+            let v = t['Vehicle No'];
+            vCountMap[v] = (vCountMap[v] || 0) + 1;
+        });
+
         let tCount = 0, colCount = 0, penCount = 0;
-        
-        // Aaj ki date (Time 00:00:00 kar rahe hain taaki sirf din count hon)
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
@@ -145,70 +210,99 @@ async function loadTrips() {
             let isCollected = (String(trip['_colG'] || "").toLowerCase().trim() === "yes");
             let collectorName = trip['_colH'] || "Not Specified";
             let amt = trip['Amount'] || 0;
+            let vNo = trip['Vehicle No'];
             
-            // --- Days Pending Calculation Fix ---
+            // Badge Logic: Pehli baar ya purani?
+            let vCount = vCountMap[vNo];
+            let vBadge = "";
+            if (vCount === 1) {
+                vBadge = `<span class="badge bg-info text-dark" style="font-size: 9px; vertical-align: middle; margin-left: 5px; border-radius: 4px;">NEW VEHICLE</span>`;
+            } else {
+                vBadge = `<span class="badge bg-secondary" style="font-size: 9px; vertical-align: middle; margin-left: 5px; border-radius: 4px;">${vCount} TRIPS</span>`;
+            }
+
+            // Pending Days Logic
             let daysText = "";
             let tripDate = parseSheetDate(trip['Date']);
-            
             if (tripDate && !isCollected) {
                 tripDate.setHours(0, 0, 0, 0);
-                
-                // Difference in milliseconds
-                let diffTime = today - tripDate;
-                // Convert to days
-                let diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                
-                // Sirf tab dikhaye jab 1 din ya usse zyada ho gaya ho
+                let diffDays = Math.floor((today - tripDate) / (1000 * 60 * 60 * 24));
                 if (diffDays >= 1) {
-                    if (diffDays > 15) {
-                        daysText = `<span class="overdue-tag bg-danger text-white"><i class="bi bi-exclamation-triangle"></i> Pending ${diffDays} Days</span>`;
-                    } else {
-                        daysText = `<span class="overdue-tag bg-warning text-dark"><i class="bi bi-clock"></i> ${diffDays} Days Pending</span>`;
-                    }
+                    daysText = diffDays > 15 
+                        ? `<span class="overdue-tag bg-danger text-white"><i class="bi bi-exclamation-triangle"></i> ${diffDays} Days Overdue</span>`
+                        : `<span class="overdue-tag bg-warning text-dark"><i class="bi bi-clock"></i> ${diffDays} Days Pending</span>`;
                 }
             }
 
             tCount++;
             if(isCollected) colCount++; else penCount++;
 
+            // Card HTML (Isme humne vBadge add kiya hai)
             container.insertAdjacentHTML('beforeend', `
-                <div class="trip-card shadow-sm ${isCollected ? 'status-collected' : 'status-pending'}">
-                    <div class="d-flex justify-content-between align-items-start">
+                <div class="trip-card shadow-sm ${isCollected ? 'status-collected' : 'status-pending'} mb-4">
+                    <div class="d-flex justify-content-between align-items-start border-bottom pb-2 mb-2">
                         <div>
-                            <h5 class="fw-bold mb-0" style="letter-spacing:0.5px;">${trip['Vehicle No']}</h5>
-                            <small class="text-muted" style="font-size:11px">${trip['Date']}</small>
-                            <div class="mt-1">${daysText}</div>
+                            <h5 class="fw-bold mb-0 text-primary d-inline-block">${vNo}</h5>
+                            ${vBadge} <!-- YAHAN BADGE DIKHEGA -->
+                            <br>
+                            <small class="text-muted"><i class="bi bi-calendar3"></i> ${trip['Date']}</small>
                         </div>
                         <div class="text-end">
-                            <span class="badge ${isCollected ? 'badge-soft-success' : 'badge-soft-danger'}">
+                            <span class="badge ${isCollected ? 'bg-success' : 'bg-danger'} mb-1">
                                 ${isCollected ? 'COLLECTED' : 'PENDING'}
                             </span>
-                            <div class="collector-tag">
-                                <i class="bi bi-person-fill"></i> ${isCollected ? collectorName : 'Waiting'}
-                            </div>
-                            <div class="fw-bold text-primary h5 mt-1 mb-0">₹${amt}</div>
+                            <div class="fw-bold h5 mb-0" style="color:#003366;">₹${amt}</div>
                         </div>
                     </div>
 
                     <div class="route-timeline">
                         <div class="point point-start"></div>
-                        <div class="small fw-bold text-uppercase" style="color: #444;">${trip['From']}</div>
-                        <div style="height:12px"></div>
+                        <div class="small fw-bold text-uppercase">${trip['From'] || 'N/A'}</div>
+                        <div style="height:15px"></div>
                         <div class="point point-end"></div>
-                        <div class="small fw-bold text-uppercase" style="color: #444;">${trip['To']}</div>
+                        <div class="small fw-bold text-uppercase">${trip['To'] || 'N/A'}</div>
                     </div>
 
-                    <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">
-                        <div class="small">
-                            <span class="text-muted" style="font-size:10px;">PARTY</span><br>
+                   <div class="details-grid row g-0 text-center mb-2 mt-3">
+                        <div class="col-4 border-end">
+                            <small class="text-muted d-block" style="font-size:10px;">MATERIAL</small>
+                            <span class="fw-bold small">${trip['Material'] || '-'}</span>
+                        </div>
+                        <div class="col-4 border-end">
+                            <small class="text-muted d-block" style="font-size:10px;">RATE</small>
+                            <span class="fw-bold small">${trip['Rate'] || '0'}</span>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted d-block" style="font-size:10px;">WEIGHT/CAP</small>
+                            <span class="fw-bold small">${trip['Capacity Ton'] || '0'}</span> 
+                        </div>
+                    </div>
+
+                    <div class="mt-2 p-2 rounded" style="background: rgba(0,0,0,0.03); font-size: 12px;">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span><i class="bi bi-person text-muted"></i> Party:</span>
                             <span class="fw-bold">${trip['Party Name'] || '-'}</span>
                         </div>
-                        <div class="d-flex gap-2">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span><i class="bi bi-person-badge text-muted"></i> Driver:</span>
+                            <div class="d-flex align-items-center gap-3">
+                                <span class="fw-bold">${trip['Driver No'] || '-'}</span>
+                                <div class="d-flex gap-2">
+                                    ${trip['Driver No'] ? `<a href="tel:${trip['Driver No']}" class="text-primary"><i class="bi bi-telephone-fill"></i></a>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span><i class="bi bi-person-check text-muted"></i> Owner:</span>
+                            <span class="fw-bold">${trip['Lorry Owner Contact'] || trip['_owner'] || '-'}</span>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        ${daysText}
+                        <div class="d-flex gap-2 ms-auto">
                             <button class="action-btn-circle btn-whatsapp" onclick="shareTrip('${trip['Vehicle No']}', '${trip['From']}', '${trip['To']}', '${trip['Party Name']}', '${amt}', '${trip['Date']}')">
                                 <i class="bi bi-whatsapp"></i>
-                            </button>
-                            <button class="action-btn-circle">
-                                <i class="bi bi-three-dots-vertical"></i>
                             </button>
                         </div>
                     </div>
@@ -221,14 +315,30 @@ async function loadTrips() {
         document.getElementById('sumPenCount').innerText = penCount;
 
     } catch (e) { 
-        container.innerHTML = '<div class="text-center p-5">Error loading data.</div>';
+        container.innerHTML = '<div class="text-center p-5 text-danger">Error loading data.</div>';
     }
 }
 
 // WhatsApp Share
-function shareTrip(vNo, from, to, party, amt, date) {
-    let msg = `*ATC Trip Details*%0A*Date:* ${date}%0A*Vehicle:* ${vNo}%0A*Route:* ${from} to ${to}%0A*Party:* ${party}%0A*Amount:* ₹${amt}`;
-    window.open(`https://wa.me/?text=${msg}`, '_blank');
+function shareTrip(phone, vNo, from, to, party, amt, date) {
+    let msg = `*ATC Trip Details*%0A` +
+              `*Date:* ${date}%0A` +
+              `*Vehicle:* ${vNo}%0A` +
+              `*Route:* ${from} to ${to}%0A` +
+              `*Party:* ${party}%0A` +
+              `*Amount:* ₹${amt}`;
+
+    // Phone number se faltu spaces aur characters hatane ke liye
+    let cleanPhone = String(phone || "").replace(/\D/g, '');
+
+    if (cleanPhone.length >= 10) {
+        // Agar 10 digit ka number hai, toh India ka code (+91) lagao aur direct chat kholo
+        if (cleanPhone.length === 10) cleanPhone = "91" + cleanPhone;
+        window.open(`https://wa.me/${cleanPhone}?text=${msg}`, '_blank');
+    } else {
+        // Agar number nahi hai, toh purana tarika (Contact list khulegi select karne ke liye)
+        window.open(`https://wa.me/?text=${msg}`, '_blank');
+    }
 }
 
 // --- VEHICLE SECTION LOGIC ---
