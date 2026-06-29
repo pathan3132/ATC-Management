@@ -1,0 +1,108 @@
+var SHEET_ID = "1D-0LKTCyKAbOREkpnKInPRWlT9ikRt2W2Po49AnIbR0";
+var FOLDER_ID = "1a0dj2lYHt2KZsd5fx6a51QhrmQd7OEWj"; 
+
+function doGet(e) {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var action = e.parameter.action;
+  var sheet = ss.getSheetByName("Data_log");
+  var lastRow = sheet.getLastRow();
+
+  // 1. UNIQUE VEHICLES (Optimized & Safe)
+  if (action === "getVehicles") {
+    if (lastRow <= 1) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
+    var values = sheet.getRange(2, 2, lastRow - 1, 1).getValues(); // Column B
+    var vehicles = [...new Set(values.map(r => r[0].toString().trim().toUpperCase()))].filter(v => v !== "");
+    return ContentService.createTextOutput(JSON.stringify(vehicles.sort())).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // 2. GET DOCS WITH FILENAMES
+  if (action === "getDocs") {
+    var docSheet = ss.getSheetByName("Vehicle_Docs");
+    if (!docSheet || docSheet.getLastRow() === 0) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
+    var data = docSheet.getDataRange().getValues();
+    var searchVNo = e.parameter.vNo.toUpperCase();
+    var docs = [];
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0].toString().toUpperCase() == searchVNo) {
+        docs.push({ url: data[i][1], name: data[i][2] || "Unnamed File" });
+      }
+    }
+    return ContentService.createTextOutput(JSON.stringify(docs)).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // 3. FAST RECENT TRIPS
+  if (action === "getRecent") {
+    if (lastRow <= 1) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
+    var startRow = Math.max(2, lastRow - 4);
+    var data = sheet.getRange(startRow, 1, (lastRow - startRow + 1), sheet.getLastColumn()).getValues();
+    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    var res = data.reverse().map(row => {
+      var obj = {};
+      headers.forEach((h, i) => obj[h] = row[i]);
+      return obj;
+    });
+    return ContentService.createTextOutput(JSON.stringify(res)).setMimeType(ContentService.MimeType.JSON);
+  }
+  // ... existing code ...
+
+  if (action === "getVehicleHistory") {
+    var searchVNo = e.parameter.vNo.toUpperCase();
+    var dataAll = sheet.getDataRange().getValues();
+    var headers = dataAll[0];
+    var history = [];
+    
+    // Reverse loop taaki nayi trips pehle dikhein
+    for (var i = dataAll.length - 1; i >= 1; i--) {
+      if (dataAll[i][1].toString().toUpperCase() === searchVNo) {
+        var obj = {};
+        headers.forEach((h, index) => {
+          obj[h] = dataAll[i][index];
+          if (index === 6) obj["_status"] = dataAll[i][index]; // Received Status
+        });
+        history.push(obj);
+      }
+    }
+    return ContentService.createTextOutput(JSON.stringify(history)).setMimeType(ContentService.MimeType.JSON);
+  }
+
+
+ // DEFAULT: ALL DATA (Mapping Column G and H for Accounts)
+  var dataAll = sheet.getDataRange().getValues();
+  var headersAll = dataAll[0];
+   var jsonArray = dataAll.slice(1).reverse().map(row => {
+    var obj = {};
+    headersAll.forEach((h, i) => {
+      obj[h] = row[i];
+      if (i === 6) obj["_colG"] = row[i]; // Received Status
+      if (i === 7) obj["_colH"] = row[i]; // Collected Name
+      if (i === 8) obj["_owner"] = row[i]; // Lorry Owner Contact (Column I)
+    });
+    return obj;
+  });
+  return ContentService.createTextOutput(JSON.stringify(jsonArray)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  try {
+    var data = JSON.parse(e.postData.contents);
+    if (data.action === "uploadDocument") {
+      var folder = DriveApp.getFolderById(FOLDER_ID);
+      // Original Filename use karein
+      var blob = Utilities.newBlob(Utilities.base64Decode(data.base64), data.mimeType, data.fileName);
+      var file = folder.createFile(blob);
+      var fileUrl = file.getUrl();
+
+      var docSheet = ss.getSheetByName("Vehicle_Docs") || ss.insertSheet("Vehicle_Docs");
+      if (docSheet.getLastRow() === 0) {
+        docSheet.appendRow(["Vehicle No", "Document Link", "File Name", "Upload Date"]);
+      }
+      // Naya structure: VNo, Link, FileName, Date
+      docSheet.appendRow([data.vNo.toUpperCase(), fileUrl, data.fileName, new Date()]);
+      return ContentService.createTextOutput("Success").setMimeType(ContentService.MimeType.TEXT);
+    }
+  } catch (err) {
+    return ContentService.createTextOutput("Error: " + err.toString()).setMimeType(ContentService.MimeType.TEXT);
+  }
+}
+

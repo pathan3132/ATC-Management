@@ -96,71 +96,116 @@
     <div class="container py-4">
         
         <!-- HOME SECTION -->
-        <!-- HOME SECTION -->
+    <!-- HOME SECTION -->
 <div id="home-section" class="app-section">
-    <!-- Welcome Header -->
-    <div class="home-header p-4 mb-4 shadow-sm text-white rounded-bottom-4">
-        <h5 id="greetingText">Good Morning,</h5>
-        <h2 class="fw-bold">ATC Management</h2>
-        <p class="small opacity-75 mb-0"><i class="bi bi-geo-alt-fill"></i> ATC TRANSPORT COMPANY</p>
-    </div>
-
-    <!-- Quick Action Grid -->
-    <div class="row g-3 px-2">
-        <div class="col-6">
-            <div class="action-card shadow-sm p-3 text-center border-0 rounded-4 bg-white" onclick="showSection('new-trip')">
-                <div class="icon-box bg-primary-light text-primary mb-2 mx-auto">
-                    <i class="bi bi-plus-lg fs-3"></i>
-                </div>
-                <span class="fw-bold d-block">New Trip</span>
-                <small class="text-muted">Create Entry</small>
+    <!-- Premium Header -->
+    <div class="home-hero-bg p-4 mb-3 text-white">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <small id="greetingText" class="opacity-75">Good Morning,</small>
+                <h3 class="fw-bold mb-0">ATC Management</h3>
+                <p style="font-size: 11px; letter-spacing: 1px;" class="mb-0 text-info">ALL INDIA TRANSPORT SERVICE</p>
+            </div>
+            <div class="live-clock text-end">
+                <h5 id="homeTime" class="mb-0 fw-bold">00:00</h5>
+                <small id="homeDate" class="opacity-50" style="font-size: 10px;">Date</small>
             </div>
         </div>
-        <div class="col-6">
-            <div class="action-card shadow-sm p-3 text-center border-0 rounded-4 bg-white" onclick="showSection('view-trips')">
-                <div class="icon-box bg-warning-light text-warning mb-2 mx-auto">
-                    <i class="bi bi-truck fs-3"></i>
-                </div>
-                <span class="fw-bold d-block">Trips List</span>
-                <small class="text-muted">View History</small>
+        
+        <!-- Live Quick Stats Card -->
+        <div class="stats-glass-card mt-4 p-3 d-flex justify-content-around">
+            <div class="stat-item text-center">
+                <small class="d-block opacity-75">Today's Trips</small>
+                <span id="todayCount" class="fw-bold fs-5">0</span>
             </div>
-        </div>
-        <div class="col-6">
-            <div class="action-card shadow-sm p-3 text-center border-0 rounded-4 bg-white" onclick="showSection('accounts')">
-                <div class="icon-box bg-success-light text-success mb-2 mx-auto">
-                    <i class="bi bi-wallet2 fs-3"></i>
-                </div>
-                <span class="fw-bold d-block">Accounts</span>
-                <small class="text-muted">Hisaab-Kitaab</small>
+            <div class="stat-item text-center border-start border-end px-3">
+                <small class="d-block opacity-75">Today's Biz</small>
+                <span id="todayBiz" class="fw-bold fs-5">₹0</span>
             </div>
-        </div>
-        <div class="col-6">
-            <div class="action-card shadow-sm p-3 text-center border-0 rounded-4 bg-white" onclick="location.reload()">
-                <div class="icon-box bg-info-light text-info mb-2 mx-auto">
-                    <i class="bi bi-arrow-repeat fs-3"></i>
-                </div>
-                <span class="fw-bold d-block">Refresh</span>
-                <small class="text-muted">Sync Data</small>
+            <div class="stat-item text-center">
+                <small class="d-block opacity-75">Pending</small>
+                <span id="homePendingCount" class="fw-bold fs-5 text-warning">0</span>
             </div>
         </div>
     </div>
 
-    <!-- Recent Trips Peek -->
-    <div class="mt-4 px-2">
+    <!-- Quick Services Grid -->
+    <div class="px-3">
+        <h6 class="fw-bold mb-3 text-secondary">MAIN SERVICES</h6>
+        <div class="row g-3">
+            <div class="col-6">
+                <div class="service-card" onclick="showSection('new-trip')">
+                    <div class="icon-circle bg-primary-subtle text-primary">
+                        <i class="bi bi-plus-square-fill"></i>
+                    </div>
+                    <span>New Entry</span>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="service-card" onclick="showSection('view-trips')">
+                    <div class="icon-circle bg-warning-subtle text-warning">
+                        <i class="bi bi-truck-flatbed"></i>
+                    </div>
+                    <span>View History</span>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="service-card" onclick="showSection('accounts')">
+                    <div class="icon-circle bg-success-subtle text-success">
+                        <i class="bi bi-wallet-fill"></i>
+                    </div>
+                    <span>Ledger</span>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="service-card" onclick="showSection('vehicles')">
+                    <div class="icon-circle bg-info-subtle text-info">
+                        <i class="bi bi-shield-check"></i>
+                    </div>
+                    <span>Fleet (RC)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity Timeline -->
+    <div class="mt-4 px-3 mb-5">
         <div class="d-flex justify-content-between align-items-center mb-2">
-            <h6 class="fw-bold mb-0">Recent Trips</h6>
-            <a href="#" class="small text-decoration-none" onclick="showSection('view-trips')">See All</a>
+            <h6 class="fw-bold text-secondary mb-0">RECENT TRIPS</h6>
+            <button class="btn btn-sm text-primary p-0" onclick="showSection('view-trips')">View All</button>
         </div>
-        <div id="homeRecentTrips" class="peek-container">
-            <!-- JS se aakhri 3 trips yahan aayengi -->
-            <div class="text-center p-3 text-muted small">Fetching recent data...</div>
+        <div id="homeRecentTrips" class="recent-list">
+            <!-- Dynamic Data -->
         </div>
     </div>
+
+    <!-- Floating Action Button -->
+    <button class="fab-btn shadow-lg" onclick="showSection('new-trip')">
+        <i class="bi bi-plus-lg"></i>
+    </button>
 </div>
 
         <!-- ACCOUNTS SECTION -->
         <div id="accounts-section" class="app-section hidden">
             <h4 class="fw-bold mb-3"><i class="bi bi-pie-chart-fill me-2 text-success"></i>Hisaab-Kitaab</h4>
+            <!-- Accounts Filter -->
+<div class="filter-card bg-white p-3 rounded-4 shadow-sm mb-3">
+    <div class="row g-2 align-items-end">
+        <div class="col-5">
+            <label class="small fw-bold">From</label>
+            <input type="date" id="acc-start-date" class="form-control form-control-sm">
+        </div>
+        <div class="col-5">
+            <label class="small fw-bold">To</label>
+            <input type="date" id="acc-end-date" class="form-control form-control-sm">
+        </div>
+        <div class="col-2">
+            <button class="btn btn-success btn-sm w-100" onclick="updateAccounts()">
+                <i class="bi bi-check-lg"></i>
+            </button>
+        </div>
+    </div>
+</div>
             <div class="card shadow-sm border-0 mb-3 text-white p-3" style="background: linear-gradient(45deg, #003366, #0056b3);">
                 <small class="opacity-75">Total Business Value</small>
                 <h2 id="acc-total-business" class="fw-bold">₹0</h2>
@@ -255,6 +300,24 @@
         <h4 class="fw-bold">Trip Records</h4>
         <button class="btn btn-sm btn-outline-primary" onclick="loadTrips()">🔄 Refresh</button>
     </div>
+
+    <!-- View Trips Filter -->
+<div class="filter-card bg-white p-3 rounded-4 shadow-sm mb-3">
+    <small class="fw-bold text-muted d-block mb-2">DATE RANGE FILTER</small>
+    <div class="row g-2">
+        <div class="col-5">
+            <input type="date" id="trip-start-date" class="form-control form-control-sm">
+        </div>
+        <div class="col-5">
+            <input type="date" id="trip-end-date" class="form-control form-control-sm">
+        </div>
+        <div class="col-2">
+            <button class="btn btn-primary btn-sm w-100" onclick="loadTrips()">
+                <i class="bi bi-filter"></i>
+            </button>
+        </div>
+    </div>
+</div>
     
     <!-- Simplified Top Summary Bar (No Amounts) -->
     <div id="tripSummaryBar" class="hidden d-flex align-items-center justify-content-around shadow-sm mb-3">

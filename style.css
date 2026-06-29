@@ -460,13 +460,15 @@ label { font-size: 13px; font-weight: bold; color: #555; margin-bottom: 2px; }
 .point-end { bottom: 0; border-color: #dc3545; }
 
 .collector-tag {
-    font-size: 11px;
-    background: rgba(0,0,0,0.05);
-    padding: 2px 8px;
-    border-radius: 5px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #28a745;
+    background: #eaffea;
+    padding: 2px 6px;
+    border-radius: 4px;
     display: inline-block;
-    color: #555;
-    margin-top: 4px;
+    text-transform: uppercase;
+    margin-top: 2px;
 }
 
 .action-btn-circle {
@@ -743,4 +745,89 @@ label { font-size: 13px; font-weight: bold; color: #555; margin-bottom: 2px; }
     padding: 4px 7px;
     font-weight: 700;
     text-transform: uppercase;
+}
+
+.filter-card {
+    border: 1px solid #edf2f7;
+}
+
+.filter-card label {
+    font-size: 10px;
+    margin-bottom: 4px;
+    color: #64748b;
+}
+
+.form-control-sm {
+    font-size: 12px;
+    border-radius: 8px;
+}
+
+/* Home Premium Header */
+.home-hero-bg {
+    background: linear-gradient(135deg, #001a33 0%, #003366 100%);
+    border-radius: 0 0 30px 30px;
+    box-shadow: 0 10px 30px rgba(0, 51, 102, 0.2);
+}
+
+/* Glassmorphism Effect */
+.stats-glass-card {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Service Cards */
+.service-card {
+    background: white;
+    padding: 15px;
+    border-radius: 18px;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+    transition: 0.3s;
+    border: 1px solid #f0f0f0;
+}
+
+.service-card:active { transform: scale(0.95); }
+
+.icon-circle {
+    width: 45px;
+    height: 45px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 10px;
+    font-size: 20px;
+}
+
+/* Floating Action Button (FAB) */
+.fab-btn {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    width: 60px;
+    height: 60px;
+    background: #003366;
+    color: white;
+    border-radius: 50%;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    z-index: 999;
+    box-shadow: 0 8px 20px rgba(0, 51, 102, 0.4);
+}
+
+/* Recent Trip Items */
+.recent-item {
+    background: white;
+    padding: 12px;
+    border-radius: 15px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-left: 5px solid #003366;
 }
