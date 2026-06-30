@@ -1,12 +1,21 @@
+// --- LOCAL DATABASE SETUP (IndexedDB) ---
+let db;
+const request = indexedDB.open("ATC_Slips_DB", 1);
+
+request.onupgradeneeded = (e) => {
+    db = e.target.result;
+    db.createObjectStore("slips", { keyPath: "id", autoIncrement: true });
+};
+request.onsuccess = (e) => { db = e.target.result; };
+
+// Function: PDF ko local storage mein save karna
+function saveSlipLocally(vNo, date, blob) {
+    const transaction = db.transaction(["slips"], "readwrite");
+    const store = transaction.objectStore("slips");
+    store.add({ vNo, date, pdfBlob: blob, timestamp: new Date() });
+}
 // --- SECURITY CONFIG ---
 const SECRET_PIN = "2026"; // Aap yahan apna 4-digit PIN set karein
-
-// --- INITIALIZE LOCK STATUS ---
-window.onload = () => {
-    checkLoginStatus();
-    updateGreeting();
-    loadHomeRecent();
-};
 
 // Check if already logged in (Refresh par baar baar lock na dikhe - Optional)
 // Agar aap chahte hain ki har baar app khulte hi lock dikhe, toh localStorage mat use karein
@@ -60,10 +69,15 @@ function logout() {
 // IS LINE KO SAHI SE CHECK KAREIN - Sirf URL hona chahiye
 const scriptURL = 'https://script.google.com/macros/s/AKfycbzin-51q_OK2kEcEdguAkEhxMQOGgpzuQmyioXL2NTzO4ysvSSZNDXG3pEzw_5wvq46/exec';
 
-// --- INITIALIZE ---
 window.onload = () => {
+    checkLoginStatus();
     updateGreeting();
     loadHomeRecent();
+    // Clock update har minute
+    setInterval(() => {
+        const timeEl = document.getElementById('homeTime');
+        if(timeEl) timeEl.innerText = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }, 60000);
 };
 
 function updateGreeting() {
@@ -85,6 +99,10 @@ function showSection(id) {
     if(id === 'accounts') updateAccounts();
     if(id === 'home') loadHomeRecent();
     if(id === 'vehicles') loadVehicles(); 
+    
+    // --- YE DO LINES ZAROORI HAIN ---
+    if(id === 'loading-slip') loadVehicleListForSlip(); 
+    if(id === 'slip-history') loadSlipHistory(); // Ye missing tha
 
     const sidebar = document.getElementById('sidebar');
     const instance = bootstrap.Offcanvas.getInstance(sidebar);
@@ -111,11 +129,13 @@ async function submitTrip() {
     if(!document.getElementById('date').value || !document.getElementById('vNo').value) {
         alert("Please fill Date and Vehicle Number!"); return;
     }
-    btn.innerHTML = 'SAVING...'; btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> SAVING...'; 
+    btn.disabled = true;
 
     const formData = {
+        action: "saveTrip", // Added this
         date: document.getElementById('date').value,
-        vNo: document.getElementById('vNo').value,
+        vNo: document.getElementById('vNo').value.toUpperCase(),
         dNo: document.getElementById('dNo').value,
         from: document.getElementById('from').value,
         to: document.getElementById('to').value,
@@ -129,10 +149,11 @@ async function submitTrip() {
     };
 
     try {
-        await fetch(scriptURL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(formData) });
+        const response = await fetch(scriptURL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(formData) });
         alert("✅ Trip Saved Successfully!");
         document.getElementById('tripForm').reset();
-    } catch (e) { alert("Error!"); }
+        showSection('home');
+    } catch (e) { alert("Error connecting to server!"); }
     btn.innerHTML = 'SUBMIT TO GOOGLE SHEET'; btn.disabled = false;
 }
 
@@ -194,18 +215,6 @@ async function loadHomeRecent() {
 
     } catch (e) { container.innerHTML = '<div class="text-center p-3 small text-muted">Please refresh to load data.</div>'; }
 }
-
-// Ensure loadHomeRecent runs on page load
-window.onload = () => {
-    checkLoginStatus();
-    updateGreeting();
-    loadHomeRecent();
-    // Clock update har minute
-    setInterval(() => {
-        document.getElementById('homeTime').innerText = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }, 60000);
-};
-
 
 
 function toggleAmountVisibility() {
@@ -579,86 +588,91 @@ function isDateInRange(dateStr, start, end) {
     return tripDate >= sDate && tripDate <= eDate;
 }
 
-
-// Detail khulne par us gadi ke documents fetch karein
-async function toggleDetails(id, vNo) {
-    const el = document.getElementById(id);
-    if(el.classList.contains('hidden')) {
-        el.classList.remove('hidden');
-        fetchVehicleDocs(vNo);
-        fetchVehicleHistory(vNo); // Naya function call
-    } else {
-        el.classList.add('hidden');
-    }
-}
-
 async function fetchVehicleHistory(vNo) {
-    const histContainer = document.getElementById(`historyList_${vNo}`);
-    const statsContainer = document.getElementById(`stats_${vNo}`);
+    const safeId = vNo.replace(/\s+/g, '_');
+    const histContainer = document.getElementById(`historyList_${safeId}`);
+    const statsContainer = document.getElementById(`stats_${safeId}`);
     
     try {
         const res = await fetch(scriptURL + `?action=getVehicleHistory&vNo=${encodeURIComponent(vNo)}`);
         const history = await res.json();
         
         if(!history || history.length === 0) {
-            histContainer.innerHTML = '<div class="text-center p-3 text-muted">No history found</div>';
+            histContainer.innerHTML = '<div class="text-center p-3 text-muted small">No history found for this vehicle</div>';
+            statsContainer.innerHTML = '<div class="col-12 text-center small opacity-50">No Data</div>';
             return;
         }
 
-        let totalBus = 0, totalPend = 0;
-        history.forEach(t => {
+        // --- 1. CALCULATE TOTALS ---
+        let totalBus = 0;
+        let pendingAmt = 0;
+        history.forEach(t => { 
             let amt = parseFloat(t['Amount']) || 0;
             totalBus += amt;
-            if(String(t['_status']).toLowerCase() !== 'yes') totalPend += amt;
+            if(String(t['_status']).toLowerCase() !== 'yes') {
+                pendingAmt += amt;
+            }
         });
 
-        // Stylish Stats
+        // --- 2. PREMIUM STATS CARDS ---
         statsContainer.innerHTML = `
             <div class="col-4">
-                <div class="v-stats-card">
-                    <span class="v-stats-label">Trips</span>
-                    <span class="v-stats-value">${history.length}</span>
+                <div class="p-2 border rounded bg-white shadow-sm">
+                    <small class="d-block text-muted" style="font-size:9px">TRIPS</small>
+                    <b class="text-primary">${history.length}</b>
                 </div>
             </div>
             <div class="col-4">
-                <div class="v-stats-card">
-                    <span class="v-stats-label">Business</span>
-                    <span class="v-stats-value text-success">₹${totalBus}</span>
+                <div class="p-2 border rounded bg-white shadow-sm">
+                    <small class="d-block text-muted" style="font-size:9px">TOTAL BIZ</small>
+                    <b class="text-success">₹${totalBus.toLocaleString('en-IN')}</b>
                 </div>
             </div>
             <div class="col-4">
-                <div class="v-stats-card">
-                    <span class="v-stats-label">Balance</span>
-                    <span class="v-stats-value text-danger">₹${totalPend}</span>
+                <div class="p-2 border rounded bg-white shadow-sm">
+                    <small class="d-block text-muted" style="font-size:9px">BALANCE</small>
+                    <b class="text-danger">₹${pendingAmt.toLocaleString('en-IN')}</b>
                 </div>
             </div>
         `;
 
-        // Modern History Items
-        let html = history.map(trip => `
-            <div class="history-item-new shadow-sm">
-                <div class="d-flex justify-content-between">
-                    <span class="fw-bold" style="font-size:12px">${trip['From']} → ${trip['To']}</span>
-                    <span class="text-primary fw-bold" style="font-size:12px">₹${trip['Amount']}</span>
-                </div>
-                <div class="d-flex justify-content-between align-items-center mt-1">
-                    <small class="text-muted" style="font-size:10px">${trip['Date']} | ${trip['Party Name']}</small>
-                    <span class="badge ${String(trip['_status']).toLowerCase() === 'yes' ? 'badge-soft-success' : 'badge-soft-danger'}">
-                        ${String(trip['_status']).toLowerCase() === 'yes' ? 'Received' : 'Pending'}
-                    </span>
+        // --- 3. STYLISH HISTORY ITEMS ---
+        histContainer.innerHTML = history.map(trip => {
+            const isRec = String(trip['_status']).toLowerCase() === 'yes';
+            return `
+            <div class="card mb-2 border-0 shadow-sm overflow-hidden" style="border-left: 4px solid ${isRec ? '#28a745' : '#dc3545'} !important;">
+                <div class="card-body p-2" style="font-size: 12px;">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <span class="fw-bold text-dark">${trip['From']} <i class="bi bi-arrow-right text-muted"></i> ${trip['To']}</span>
+                            <div class="text-muted" style="font-size: 10px;">
+                                <i class="bi bi-calendar3"></i> ${trip['Date']} | <i class="bi bi-person"></i> ${trip['Party Name'] || 'No Party'}
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            <div class="fw-bold text-primary">₹${(trip['Amount'] || 0).toLocaleString('en-IN')}</div>
+                            <span class="badge ${isRec ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'}" style="font-size: 9px;">
+                                ${isRec ? 'RECEIVED' : 'PENDING'}
+                            </span>
+                        </div>
+                    </div>
                 </div>
             </div>
-        `).join('');
-        
-        histContainer.innerHTML = `<div style="max-height:350px; overflow-y:auto; padding:5px;">${html}</div>`;
-        
-    } catch (e) { histContainer.innerHTML = 'Error...'; }
+            `;
+        }).join('');
+
+    } catch (e) { 
+        histContainer.innerHTML = '<div class="text-danger small p-2">Failed to load history.</div>'; 
+    }
 }
 
 
 async function fetchVehicleDocs(vNo) {
-    const docContainer = document.getElementById(`docList_${vNo}`);
-    docContainer.innerHTML = '<div class="spinner-border spinner-border-sm text-info"></div>';
+    const safeId = vNo.replace(/\s+/g, '_'); // ID dhoondhne ke liye space hatayein
+    const docContainer = document.getElementById(`docList_${safeId}`);
+    if(!docContainer) return;
+
+    docContainer.innerHTML = 'Loading docs...';
     
     try {
         const res = await fetch(scriptURL + `?action=getDocs&vNo=${encodeURIComponent(vNo)}`);
@@ -666,21 +680,17 @@ async function fetchVehicleDocs(vNo) {
         docContainer.innerHTML = '';
         
         if(!docs || docs.length === 0) {
-            docContainer.innerHTML = '<p class="small text-muted py-2">No documents found.</p>';
+            docContainer.innerHTML = '<small class="text-muted">No documents found.</small>';
         } else {
-            docs.forEach((doc, i) => {
+            docs.forEach(doc => {
                 docContainer.insertAdjacentHTML('beforeend', `
-                    <a href="${doc.url}" target="_blank" class="doc-link-item">
-                        <i class="bi bi-file-earmark-text me-2 text-primary"></i> 
-                        ${doc.name} 
-                        <span class="float-end text-muted small"><i class="bi bi-box-arrow-up-right"></i></span>
+                    <a href="${doc.url}" target="_blank" class="doc-link-item d-block p-1 small">
+                        <i class="bi bi-file-earmark-text"></i> ${doc.name}
                     </a>
                 `);
             });
         }
-    } catch (e) {
-        docContainer.innerHTML = 'Error loading docs.';
-    }
+    } catch (e) { docContainer.innerHTML = 'Error loading docs.'; }
 }
 
 function triggerUpload(vNo) { document.getElementById(`file_${vNo}`).click(); }
@@ -697,13 +707,20 @@ async function uploadFile(input, vNo) {
     const reader = new FileReader();
     reader.onload = function() {
         const base64 = reader.result.split(',')[1];
-        const payload = {
-            action: "uploadDocument",
-            vNo: vNo,
-            fileName: file.name, // Original file name bhejein
-            base64: base64,
-            mimeType: file.type
-        };
+       // script.js ke generateBeeltyPDF function ke andar payload ko check karein:
+
+const payload = {
+    action: "saveLoadingSlip",
+    rowNumber: document.getElementById('slip_rowNum').value,
+    vNo: vNo,
+    // FIX: slip_date ki value uthana (Agar undefined aa raha hai toh ID check karein)
+    date: document.getElementById('slip_date').value || document.getElementById('slip_date').innerText || "NoDate", 
+    pdfBase64: pdfBase64,
+    rate: document.getElementById('slip_rate').value,
+    weight: document.getElementById('slip_weight').value,
+    driverPrice: document.getElementById('slip_dPrice').value,
+    toPay: document.getElementById('slip_toPay').value
+};
 
         const xhr = new XMLHttpRequest();
         xhr.open("POST", scriptURL, true);
@@ -788,4 +805,419 @@ function filterVehicles() {
     for (let c of cards) { 
         c.style.display = c.innerText.toUpperCase().includes(val) ? "" : "none"; 
     }
+}
+
+let currentVehicleTrips = [];
+
+
+
+// 2. Fill Logic
+function fillSlipFromSelection() {
+    const idx = document.getElementById('tripSelectDropdown').value;
+    const trip = currentVehicleTrips[idx];
+    
+    if(!trip) return;
+
+    // Header Data
+    document.getElementById('slip_vNo').value = trip['Vehicle No'] || "";
+    document.getElementById('slip_date').value = trip['Date'] || "";
+    document.getElementById('slip_party').value = trip['Party Name'] || "";
+    document.getElementById('slip_from').value = trip['From'] || "";
+    document.getElementById('slip_to').value = trip['To'] || "";
+    
+    // Finance Data
+    document.getElementById('slip_rate').value = trip['Rate'] || 0;
+    document.getElementById('slip_weight').value = (trip['Capacity Ton'] ? trip['Capacity Ton'] * 1000 : 0); // Ton to KG
+    document.getElementById('slip_advance').value = trip['Advance'] || 0;
+    
+    // Check property name: Driver Prize ya Driver Price? 
+    document.getElementById('slip_dPrice').value = trip['Driver Prize'] || trip['Driver Price'] || 0;
+    
+    // Contacts & Details
+    document.getElementById('slip_lOwner').value = trip['Lorry Owner Name'] || "";
+    document.getElementById('slip_oMob').value = trip['Lorry Owner Contact'] || trip['_owner'] || "";
+    document.getElementById('slip_dName').value = trip['Driver Name'] || "";
+    document.getElementById('slip_dMob').value = trip['Driver No'] || "";
+    document.getElementById('slip_licence').value = trip['Licence No'] || "";
+    
+    // Row Number Save karna zaroori hai (update ke liye)
+    const rowInput = document.getElementById('slip_rowNum');
+    if(rowInput) rowInput.value = trip.rowNumber;
+
+    calculateSlip(); 
+}
+
+// 3. Calculation
+// --- UPDATED LOADING SLIP CALCULATION ---
+function calculateSlip() {
+    let rate = parseFloat(document.getElementById('slip_rate').value) || 0;     // Per Ton
+    let weight = parseFloat(document.getElementById('slip_weight').value) || 0; // In KG
+    let adv = parseFloat(document.getElementById('slip_advance').value) || 0;
+    let dPrice = parseFloat(document.getElementById('slip_dPrice').value) || 0;
+
+    // Standard Logic: Freight = (Weight in KG / 1000) * Rate per Ton
+    let freight_total = (weight / 1000) * rate; 
+    let toPay = (freight_total - adv) + dPrice;
+
+    document.getElementById('slip_freight').value = Math.round(freight_total);
+    document.getElementById('slip_toPay').value = Math.round(toPay);
+}
+
+// Timing Suffix (Auto 'Hr' add karna)
+const timingInput = document.getElementById('slip_timing');
+if(timingInput) {
+    timingInput.addEventListener('blur', function() {
+        let val = this.value.trim();
+        if(val !== "" && !val.toUpperCase().includes('HR')) {
+            this.value = val + " Hr";
+        }
+    });
+}
+
+// 4. Generate & Save
+// script.js mein generateBeeltyPDF function ko update karein
+
+async function generateBeeltyPDF() {
+    const btn = document.getElementById('slipSubmitBtn');
+    const element = document.getElementById('receipt-to-print');
+    const vNo = document.getElementById('slip_vNo').value || "N/A";
+
+    if(!vNo || vNo === "N/A") return alert("Data select karein!");
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving & Clearing...';
+
+    // PDF Settings (Pehle ki tarah)
+    const opt = {
+        margin: 0,
+        filename: `Slip_${vNo}.pdf`,
+        image: { type: 'jpeg', quality: 1 },
+        html2canvas: { scale: 2, useCORS: true, scrollY: 0, windowWidth: 800 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    try {
+        const originalTransform = element.style.transform;
+        element.style.transform = "none";
+        
+        const pdfWorker = html2pdf().set(opt).from(element);
+        const pdfBase64 = await pdfWorker.outputPdf('datauristring').then(res => res.split(',')[1]);
+        await pdfWorker.save();
+
+        const payload = {
+            action: "saveLoadingSlip",
+            rowNumber: document.getElementById('slip_rowNum').value,
+            vNo: vNo,
+            date: document.getElementById('slip_date').value || "NoDate",
+            pdfBase64: pdfBase64,
+            partyName: document.getElementById('slip_party').value,
+            from: document.getElementById('slip_from').value,
+            to: document.getElementById('slip_to').value,
+            rate: document.getElementById('slip_rate').value,
+            weight: document.getElementById('slip_weight').value,
+            advance: document.getElementById('slip_advance').value,
+            driverPrice: document.getElementById('slip_dPrice').value,
+            toPay: document.getElementById('slip_toPay').value,
+            lorryOwner: document.getElementById('slip_lOwner').value,
+            ownerMob: document.getElementById('slip_oMob').value,
+            driverName: document.getElementById('slip_dName').value,
+            driverMob: document.getElementById('slip_dMob').value,
+            licenceNo: document.getElementById('slip_licence').value
+        };
+
+        const res = await fetch(scriptURL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
+
+        alert("✅ Beelty Saved to New Sheet & Data_log Marked!");
+
+        // --- FORM AUR SEARCH CLEAR LOGIC ---
+        resetBeeltyForm();
+        
+        element.style.transform = originalTransform;
+        showSection('slip-history');
+
+    } catch (e) {
+        alert("Error: " + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-cloud-arrow-up-fill me-2"></i> FINALIZE, SAVE & WHATSAPP';
+    }
+}
+
+// Search field aur form reset karne ka naya function
+function resetBeeltyForm() {
+    // 1. Search fields clear karein
+    document.getElementById('slipSearchVNo').value = "";
+    document.getElementById('tripSelectionArea').classList.add('hidden');
+    document.getElementById('newVehicleAlert').classList.add('hidden');
+    
+    // 2. Beelty Form clear karein (Inputs)
+    const slipInputs = [
+        'slip_vNo', 'slip_date', 'slip_party', 'slip_from', 'slip_to',
+        'slip_rate', 'slip_weight', 'slip_advance', 'slip_dPrice',
+        'slip_lOwner', 'slip_oMob', 'slip_dName', 'slip_dMob', 
+        'slip_licence', 'slip_toPay', 'slip_rowNum'
+    ];
+    
+    slipInputs.forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.value = (id.includes('rate') || id.includes('weight') || id.includes('advance') || id.includes('Price') || id.includes('Pay')) ? 0 : "";
+    });
+}
+
+// Loading Slip ke liye gaadiyon ki list load karna
+// 1. Datalist ko load karna (Autocomplete ke liye)
+async function loadVehicleListForSlip() {
+    const list = document.getElementById('vehicleListOptions');
+    if (!list) return;
+
+    try {
+        const response = await fetch(scriptURL + "?action=getVehicles");
+        const vehicles = await response.json();
+        // Datalist mein saari gaadiyan add karein
+        list.innerHTML = vehicles.map(v => `<option value="${v}">`).join('');
+    } catch (e) {
+        console.error("Datalist error:", e);
+    }
+}
+
+// 2. Search ya New Entry handle karna
+async function searchVehicleForSlip() {
+    const vNo = document.getElementById('slipSearchVNo').value.toUpperCase().trim();
+    if(!vNo) return alert("Please enter a Vehicle Number!");
+    
+    const btn = document.querySelector('[onclick="searchVehicleForSlip()"]');
+    const selectionArea = document.getElementById('tripSelectionArea');
+    const newVAlert = document.getElementById('newVehicleAlert');
+    
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    selectionArea.classList.add('hidden');
+    newVAlert.classList.add('hidden');
+
+    try {
+        const res = await fetch(scriptURL + "?action=getTripsByVehicle&vNo=" + encodeURIComponent(vNo));
+        currentVehicleTrips = await res.json();
+        
+        if(!currentVehicleTrips || currentVehicleTrips.length === 0) {
+            // CASE: Nayi Gaadi (Record mein nahi hai)
+            newVAlert.classList.remove('hidden');
+            clearSlipForNewEntry(vNo);
+        } else {
+            // CASE: Record mil gaya
+            const dropdown = document.getElementById('tripSelectDropdown');
+            dropdown.innerHTML = currentVehicleTrips.map((t, i) => 
+                `<option value="${i}">${t['Date']} | ${t['From']} to ${t['To']}</option>`
+            ).join('');
+            selectionArea.classList.remove('hidden');
+            fillSlipFromSelection(); // Pehli trip auto-fill karein
+        }
+    } catch(e) { 
+        alert("Server error. Please try again."); 
+    } finally {
+        btn.innerHTML = '<i class="bi bi-search me-1"></i> GO';
+    }
+}
+
+// 3. Agar gaadi nayi hai toh form khali karke sirf number daalna
+function clearSlipForNewEntry(vNo) {
+    // Beelty ke fields ko khali karein
+    document.getElementById('slip_vNo').value = vNo;
+    document.getElementById('slip_date').value = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
+    document.getElementById('slip_party').value = "";
+    document.getElementById('slip_from').value = "";
+    document.getElementById('slip_to').value = "";
+    document.getElementById('slip_rate').value = 0;
+    document.getElementById('slip_weight').value = 0;
+    document.getElementById('slip_advance').value = 0;
+    document.getElementById('slip_dPrice').value = 0;
+    document.getElementById('slip_lOwner').value = "";
+    document.getElementById('slip_oMob').value = "";
+    document.getElementById('slip_dName').value = "";
+    document.getElementById('slip_dMob').value = "";
+    document.getElementById('slip_licence').value = "";
+    document.getElementById('slip_rowNum').value = ""; // Nayi entry ke liye row number khali
+    
+    calculateSlip();
+}
+
+// --- DRIVE SE SLIPS LOAD KARNA ---
+async function loadSlipHistory() {
+    const container = document.getElementById('slipHistoryList');
+    if (!container) return;
+    
+    // Show a fast loader
+    container.innerHTML = '<div class="text-center w-100 p-4"><div class="spinner-border text-danger spinner-border-sm"></div> Fetching Archive...</div>';
+    
+    try {
+        // Ab ye request Drive scan nahi karegi, sirf Sheet read karegi (0.5 seconds)
+        const response = await fetch(scriptURL + "?action=listSlips");
+        const slips = await response.json();
+        
+        container.innerHTML = ""; 
+
+        if (!slips || slips.length === 0) {
+            container.innerHTML = '<div class="text-center w-100 p-5 text-muted">No slips found in Archive.</div>';
+            return;
+        }
+
+        slips.forEach(slip => {
+            container.insertAdjacentHTML('beforeend', `
+                <div class="col-12 col-md-6 mb-2">
+                    <div class="card shadow-sm border-0" style="border-radius:12px; border-left: 5px solid #dc3545;">
+                        <div class="card-body p-2 px-3">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="text-truncate" style="max-width: 65%;">
+                                    <h6 class="fw-bold mb-0" style="font-size:13px;">${slip.name}</h6>
+                                    <small class="text-muted" style="font-size:10px;">${slip.date}</small>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <a href="${slip.url}" target="_blank" class="btn btn-sm btn-light text-danger"><i class="bi bi-file-pdf"></i></a>
+                                    <button class="btn btn-sm btn-success" onclick="shareFileFromDrive('${slip.id}', '${slip.name}')"><i class="bi bi-whatsapp"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`);
+        });
+    } catch (e) {
+        container.innerHTML = '<div class="alert alert-danger">Archive load failed.</div>';
+    }
+}
+
+// --- DRIVE SE ASLI PDF FILE SHARE KARNA ---
+async function shareFileFromDrive(fileId, fileName) {
+    const originalBtn = event.currentTarget;
+    const originalHtml = originalBtn.innerHTML;
+    originalBtn.disabled = true;
+    originalBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+    try {
+        const response = await fetch(scriptURL + `?action=getFileContent&fileId=${fileId}`);
+        const base64 = await response.text();
+
+        const byteCharacters = atob(base64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: 'application/pdf' });
+        const file = new File([blob], fileName, { type: 'application/pdf' });
+
+        // Check if HTTPS and Share is supported
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+                files: [file],
+                title: 'ATC Loading Slip',
+            });
+        } else {
+            // AGAR SHARE SUPPORT NAHI HAI (HTTP PAR) TO DOWNLOAD KARO
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            alert("Local Network (HTTP) par direct share block hai. File DOWNLOAD ho gayi hai, ab aap ise WhatsApp par bhej sakte hain.");
+        }
+    } catch (err) {
+        console.error(err);
+        alert("Action failed. Please try again.");
+    } finally {
+        originalBtn.disabled = false;
+        originalBtn.innerHTML = originalHtml;
+    }
+}
+
+// PDF View karne ke liye
+function viewSlip(id) {
+    const transaction = db.transaction(["slips"], "readonly");
+    const store = transaction.objectStore("slips");
+    store.get(id).onsuccess = (e) => {
+        const fileURL = URL.createObjectURL(e.target.result.pdfBlob);
+        window.open(fileURL, '_blank');
+    };
+}
+
+// ASLI PDF FILE WHATSAPP PAR BHEJNA (Native Share)
+async function shareActualFile(id) {
+    const transaction = db.transaction(["slips"], "readonly");
+    const store = transaction.objectStore("slips");
+    
+    store.get(id).onsuccess = async (e) => {
+        const slip = e.target.result;
+        const file = new File([slip.pdfBlob], `Slip_${slip.vNo}.pdf`, { type: 'application/pdf' });
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({
+                    files: [file],
+                    title: 'ATC Loading Slip',
+                    text: `Loading Slip for Vehicle: ${slip.vNo}`
+                });
+            } catch (err) { console.error("Share failed", err); }
+        } else {
+            alert("Your browser does not support direct file sharing. Please 'View' and then download/share.");
+        }
+    };
+}
+
+// --- GAADI MASTER: VEHICLE LIST LOAD KARNA ---
+async function loadVehicles() {
+    const container = document.getElementById('vehicleCardsContainer');
+    container.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-info"></div><br>Loading...</div>';
+    
+    try {
+        const response = await fetch(scriptURL + "?action=getVehicles");
+        const vehicles = await response.json();
+        container.innerHTML = '';
+
+        vehicles.forEach((vNo) => {
+            // Space hatakar safe ID banayein (e.g. RJ_02_GD_1022)
+            const safeId = vNo.replace(/\s+/g, '_'); 
+
+            container.insertAdjacentHTML('beforeend', `
+                <div class="v-list-item shadow-sm mb-3">
+                    <div class="v-item-header" onclick="toggleDetails('details_${safeId}', '${vNo}')">
+                        <span><i class="bi bi-truck me-2"></i> ${vNo}</span>
+                        <i class="bi bi-chevron-down"></i>
+                    </div>
+                    
+                    <div id="details_${safeId}" class="v-item-details hidden">
+                        <div id="stats_${safeId}" class="row g-2 mb-3 mt-1 text-center small text-muted">Calculating...</div>
+                        
+                        <div class="d-flex gap-2 mb-3">
+                            <button class="btn btn-sm btn-primary w-50" onclick="triggerUpload('${vNo}')">Upload RC</button>
+                            <input type="file" id="file_${vNo}" class="hidden" onchange="uploadFile(this, '${vNo}')">
+                            <button class="btn btn-sm btn-outline-info w-50" onclick="fetchVehicleDocs('${vNo}')">Docs</button>
+                        </div>
+
+                        <div id="docList_${safeId}" class="mb-3"></div>
+                        <h6 class="fw-bold small border-bottom pb-1">History</h6>
+                        <div id="historyList_${safeId}" class="history-container small text-muted">Loading...</div>
+                    </div>
+                </div>
+            `);
+        });
+    } catch (e) { container.innerHTML = 'Error loading vehicles.'; }
+}
+
+// Toggle Details Update
+function toggleDetails(id, vNo) {
+    const el = document.getElementById(id);
+    if(el.classList.contains('hidden')) {
+        el.classList.remove('hidden');
+        fetchVehicleDocs(vNo);
+        fetchVehicleHistory(vNo);
+    } else {
+        el.classList.add('hidden');
+    }
+}
+
+function formatINR(amount) {
+    return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        maximumFractionDigits: 0
+    }).format(amount);
 }

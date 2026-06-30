@@ -12,6 +12,7 @@
 <meta name="theme-color" content="#003366">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="apple-touch-icon" href="Images/ATC_Logo.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 <!-- Service Worker Registration -->
 <script>
@@ -36,6 +37,12 @@
                 <a href="#" class="list-group-item p-3" onclick="showSection('new-trip')"><i class="bi bi-plus-circle me-2 text-primary"></i> New Trip Entry</a>
                 <a href="#" class="list-group-item p-3" onclick="showSection('view-trips')"><i class="bi bi-truck me-2 text-warning"></i> View All Trips</a>
                 <a href="#" class="list-group-item p-3" onclick="showSection('accounts')"><i class="bi bi-wallet2 me-2 text-success"></i> Hisaab-Kitaab</a>
+               <a href="#" class="list-group-item p-3" onclick="showSection('loading-slip')">
+    <i class="bi bi-file-earmark-pdf me-2 text-danger"></i> Generate Loading Slip (Beelty)
+</a>
+<a href="#" class="list-group-item p-3" onclick="showSection('slip-history')">
+    <i class="bi bi-folder-check me-2 text-warning"></i> Slip Archive (Saved PDFs)
+</a>
                 <a href="#" class="list-group-item p-3" onclick="showSection('vehicles')">
     <i class="bi bi-card-list me-2 text-info"></i> Gaadi Master (RC)
 </a>
@@ -353,9 +360,201 @@
     </div>
 </div>
 
+<!-- SLIP HISTORY SECTION -->
+<div id="slip-history-section" class="app-section hidden">
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="fw-bold"><i class="bi bi-folder-check text-warning me-2"></i>Slip Archive</h4>
+            <button class="btn btn-sm btn-outline-secondary" onclick="loadSlipHistory()">🔄 Refresh</button>
+        </div>
+        <!-- YE ID MATCH HONI CHAHIYE SCRIPT KE SAATH -->
+        <div id="slipHistoryList" class="row g-3 pb-5">
+            <!-- JS Data yahan render hoga -->
+        </div>
+    </div>
+</div>
 
+<!-- LOADING SLIP SECTION -->
+<!-- LOADING SLIP SECTION -->
+<div id="loading-slip-section" class="app-section hidden">
+    <!-- SEARCH AREA UPDATED -->
+<div class="card p-3 mb-3 shadow-sm border-0 bg-white" style="border-radius: 15px;">
+    <label class="fw-bold text-primary mb-2">Search Record or Enter New Vehicle</label>
+    <div class="input-group">
+        <!-- list="vehicleListOptions" hi autocomplete enable karega -->
+        <input type="text" id="slipSearchVNo" class="form-control" list="vehicleListOptions" placeholder="Enter Vehicle No (e.g. MH 20)...">
+        <datalist id="vehicleListOptions"></datalist>
+        
+        <button class="btn btn-primary px-4 fw-bold" onclick="searchVehicleForSlip()">
+            <i class="bi bi-search me-1"></i> GO
+        </button>
+    </div>
+    
+    <!-- Agar record mil jaye toh dropdown yahan dikhega -->
+    <div id="tripSelectionArea" class="mt-3 hidden p-2 bg-light rounded border">
+        <small class="text-muted d-block mb-1 fw-bold">Multiple Trips Found. Select One:</small>
+        <select id="tripSelectDropdown" class="form-select form-select-sm" onchange="fillSlipFromSelection()"></select>
+    </div>
+    
+    <!-- Nayi gaadi ke liye message -->
+    <div id="newVehicleAlert" class="mt-2 hidden">
+        <span class="badge bg-warning text-dark"><i class="bi bi-info-circle"></i> New Vehicle: Manual Entry Mode Active</span>
+    </div>
+</div>
+
+    
+
+    <!-- 2. The New Professional Beelty Design -->
+   <!-- THE MODERN CORPORATE BEELTY DESIGN -->
+<div id="beelty-capture-area">
+    <div id="receipt-to-print" class="corporate-beelty">
+        <!-- Watermark -->
+        <!-- Text watermark ki jagah ab Image Watermark -->
+<div class="watermark-container">
+    <img src="Images/Background.png" class="watermark-img">
+</div>
+
+        <!-- Top Header: Contacts & Logo -->
+        <div class="c-header">
+            <div class="c-contact-left">
+                <span class="c-owner">Munna Bhai</span><br>
+                <i class="bi bi-telephone-fill"></i> 9673732113 | 9622247911
+            </div>
+            <div class="c-logo-section">
+                <div class="c-atc-badge">
+                    <span>A</span><span>T</span><span>C</span>
+                </div>
+                <h1 class="c-company-title">ALLINDIA TRANSPORT COMPANY</h1>
+                <div class="c-sub-text">VEGETABLE SUPPLIERS & COMMISSION AGENT</div>
+            </div>
+            <div class="c-contact-right text-end">
+                <span class="c-owner">Asif Bhai</span><br>
+                <i class="bi bi-telephone-fill"></i> 7030732113 | 8888664019
+            </div>
+        </div>
+
+        <!-- Is line ko Select Trip waale div ke niche add karein -->
+<input type="hidden" id="slip_rowNum">
+
+        <!-- Info Bar: Vehicle & Date -->
+        <div class="c-info-bar">
+            <div class="c-info-item">
+                <label>VEHICLE NO</label>
+                <input type="text" id="slip_vNo" class="c-input-bold" placeholder="MH 20 EL 0000">
+            </div>
+            <div class="c-info-item text-end">
+                <label>DATE</label>
+                <input type="text" id="slip_date" class="c-input-bold" placeholder="DD-MM-YYYY">
+            </div>
+        </div>
+
+        <!-- Body Section -->
+        <div class="c-body">
+            <div class="c-party-section">
+                <label>CONSIGNOR / PARTY NAME:</label>
+                <input type="text" id="slip_party" class="c-input-line" placeholder="Enter Party Name">
+            </div>
+
+            <div class="c-grid">
+                <!-- Route & Logistics -->
+                <div class="c-box">
+                    <h6 class="c-box-title">ROUTE DETAILS</h6>
+                    <div class="c-fline"><label>FROM:</label><input type="text" id="slip_from"></div>
+                    <div class="c-fline"><label>TO:</label><input type="text" id="slip_to"></div>
+                    <div class="c-fline mt-3"><label>LORRY OWNER:</label><input type="text" id="slip_lOwner" class="text-success fw-bold"></div>
+                    <div class="c-fline"><label>VILLAGE:</label><input type="text" id="slip_oVillage"></div>
+                    <div class="c-fline"><label>CONTACT:</label><input type="text" id="slip_oMob"></div>
+                </div>
+
+                <!-- Driver Details -->
+                <div class="c-box">
+                    <h6 class="c-box-title">DRIVER DETAILS</h6>
+                    <div class="c-fline"><label>DRIVER NAME:</label><input type="text" id="slip_dName" class="text-primary fw-bold"></div>
+                    <div class="c-fline"><label>VILLAGE:</label><input type="text" id="slip_dVillage"></div>
+                    <div class="c-fline"><label>CONTACT NO:</label><input type="text" id="slip_dMob"></div>
+                    <div class="c-fline"><label>LICENCE NO:</label><input type="text" id="slip_licence"></div>
+                </div>
+            </div>
+
+            <!-- Finance Table -->
+            <div class="c-finance-section">
+                <table class="c-table">
+                    <thead>
+                        <tr>
+                            <th>PARTICULARS / DESCRIPTION</th>
+                            <th class="text-end">AMOUNT (₹)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>FREIGHT CHARGES <small>(Rate: <input type="number" id="slip_rate" oninput="calculateSlip()" style="width:60px; border-bottom:1px solid #ddd;"> | Wt: <input type="number" id="slip_weight" oninput="calculateSlip()" style="width:60px; border-bottom:1px solid #ddd;"> KG)</small></td>
+                            <td class="text-end"><input type="text" id="slip_freight" readonly class="fw-bold"></td>
+                        </tr>
+                        <tr>
+                            <td>LESS: ADVANCE RECEIVED</td>
+                            <td class="text-end"><input type="number" id="slip_advance" oninput="calculateSlip()" class="text-danger"></td>
+                        </tr>
+                        <tr>
+                            <td>ADD: DRIVER PRICE / LOADING EXP.</td>
+                            <td class="text-end"><input type="number" id="slip_dPrice" oninput="calculateSlip()" class="text-primary"></td>
+                        </tr>
+                        <tr>
+                            <td>TIMING / DELIVERY TAT</td>
+                            <td class="text-end"><input type="text" id="slip_timing" placeholder="0 Hr"></td>
+                        </tr>
+                        <tr class="c-total-row">
+                            <td class="fw-bold">NET PAYABLE BALANCE</td>
+                            <td class="text-end fw-bold" style="font-size: 20px;">₹ <input type="text" id="slip_toPay" readonly style="width:120px; font-size:20px;"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Terms & Signatures -->
+        <!-- Footer Section (Terms, Signatures & Address combined) -->
+<div class="c-footer-new">
+    <div class="footer-top-row">
+        <!-- Notes & Conditions -->
+        <div class="c-notes">
+            <strong>Notes & Conditions:</strong>
+            <ul>
+                <li>Subject to Aurangabad Jurisdiction.</li>
+                <li>Not responsible for leakage/damage after delivery.</li>
+                <li>Payment should be made as per agreed terms.</li>
+            </ul>
+        </div>
+
+        <!-- Signatures Row -->
+        <div class="sigs-container">
+            <div class="sig-block">
+                <div class="sig-line"></div>
+                <span>DRIVER'S SIGNATURE</span>
+            </div>
+            <div class="sig-block official">
+                <img src="images/Sign.png" class="official-seal">
+                <div class="sig-line"></div>
+                <span>FOR, ALLINDIA TRANSPORT</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Office Address (Ab ye text form mein bottom mein rahega) -->
+    <div class="c-address-text">
+        <i class="bi bi-geo-alt-fill"></i> Office: Solapur-Dhule Road, Gut No. 102, Fatiyabad, Aurangabad (MH) 431002
+    </div>
+</div>
+
+ <!-- 3. BUTTON SECTION (Ye zaroori hai) -->
+    <div class="slip-action-bar">
+        <button id="slipSubmitBtn" class="btn btn-success btn-lg w-100 shadow-lg fw-bold py-3" onclick="generateBeeltyPDF()">
+            <i class="bi bi-cloud-arrow-up-fill me-2"></i> FINALIZE, SAVE & WHATSAPP
+        </button>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="script.js"></script>
+
+    
 </body>
 </html>
