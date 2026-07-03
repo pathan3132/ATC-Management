@@ -668,11 +668,11 @@ async function fetchVehicleHistory(vNo) {
 
 
 async function fetchVehicleDocs(vNo) {
-    const safeId = vNo.replace(/\s+/g, '_'); // ID dhoondhne ke liye space hatayein
+    const safeId = vNo.replace(/\s+/g, '_');
     const docContainer = document.getElementById(`docList_${safeId}`);
     if(!docContainer) return;
 
-    docContainer.innerHTML = 'Loading docs...';
+    docContainer.innerHTML = '<small class="text-muted">Searching Docs...</small>';
     
     try {
         const res = await fetch(scriptURL + `?action=getDocs&vNo=${encodeURIComponent(vNo)}`);
@@ -683,9 +683,12 @@ async function fetchVehicleDocs(vNo) {
             docContainer.innerHTML = '<small class="text-muted">No documents found.</small>';
         } else {
             docs.forEach(doc => {
+                // Name check: Agar name nahi hai toh 'View Document' dikhaye
+                let fileName = doc.name && doc.name !== "Unnamed File" ? doc.name : "View Document";
+                
                 docContainer.insertAdjacentHTML('beforeend', `
                     <a href="${doc.url}" target="_blank" class="doc-link-item d-block p-1 small">
-                        <i class="bi bi-file-earmark-text"></i> ${doc.name}
+                        <i class="bi bi-file-earmark-text text-primary"></i> ${fileName}
                     </a>
                 `);
             });
@@ -699,42 +702,38 @@ async function uploadFile(input, vNo) {
     const file = input.files[0];
     if (!file) return;
 
+    // Button state change
     const btn = input.closest('.v-item-details').querySelector('.btn-primary');
     const originalText = btn.innerHTML;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> UPLOADING...';
     btn.disabled = true;
 
     const reader = new FileReader();
-    reader.onload = function() {
+    reader.onload = async function() {
         const base64 = reader.result.split(',')[1];
-       // script.js ke generateBeeltyPDF function ke andar payload ko check karein:
-
-const payload = {
-    action: "saveLoadingSlip",
-    rowNumber: document.getElementById('slip_rowNum').value,
-    vNo: vNo,
-    // FIX: slip_date ki value uthana (Agar undefined aa raha hai toh ID check karein)
-    date: document.getElementById('slip_date').value || document.getElementById('slip_date').innerText || "NoDate", 
-    pdfBase64: pdfBase64,
-    rate: document.getElementById('slip_rate').value,
-    weight: document.getElementById('slip_weight').value,
-    driverPrice: document.getElementById('slip_dPrice').value,
-    toPay: document.getElementById('slip_toPay').value
-};
-
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", scriptURL, true);
-        xhr.onreadystatechange = function() {
-            if (xhr.readyState === 4) {
-                alert("File Uploaded: " + file.name);
-                setTimeout(() => {
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
-                    fetchVehicleDocs(vNo); 
-                }, 3000);
-            }
+        
+        // PAYLOAD (Aapke purane Code.gs ke hisaab se)
+        const payload = {
+            action: "uploadDocument", // Sahi action name
+            vNo: vNo,
+            fileName: file.name,
+            base64: base64,
+            mimeType: file.type
         };
-        xhr.send(JSON.stringify(payload));
+
+        try {
+            const response = await fetch(scriptURL, { 
+                method: 'POST', 
+                body: JSON.stringify(payload) 
+            });
+            alert("✅ Document Uploaded Successfully!");
+            fetchVehicleDocs(vNo); // Refresh the list
+        } catch (e) {
+            alert("Upload failed! Check connection.");
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
     };
     reader.readAsDataURL(file);
 }
