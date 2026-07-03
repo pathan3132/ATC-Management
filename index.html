@@ -44,7 +44,7 @@
     <i class="bi bi-folder-check me-2 text-warning"></i> Slip Archive (Saved PDFs)
 </a>
                 <a href="#" class="list-group-item p-3" onclick="showSection('vehicles')">
-    <i class="bi bi-card-list me-2 text-info"></i> Gaadi Master (RC)
+    <i class="bi bi-folder-check me-2 text-info"></i> Gaadi Documents & History
 </a>
                 <hr>
                 <a href="#" class="list-group-item p-3 text-danger" onclick="location.reload()"><i class="bi bi-arrow-clockwise me-2"></i> Refresh App</a>
@@ -347,18 +347,34 @@
     <div id="tripCardsContainer"></div>
 </div>
 
-    <!-- VEHICLE MASTER SECTION (Yeh missing tha) -->
+ <!-- GAADI DOCUMENTS & HISTORY SECTION -->
+<!-- GAADI DOCUMENTS & HISTORY -->
 <div id="vehicles-section" class="app-section hidden">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h4 class="fw-bold"><i class="bi bi-card-list me-2 text-info"></i>Vehicle Master</h4>
-        <button class="btn btn-sm btn-outline-info" onclick="loadVehicles()">🔄 Refresh</button>
+        <h4 class="fw-bold" style="color: #003366;"><i class="bi bi-truck me-2"></i>Gaadi Documents & History</h4>
+        <button class="btn btn-sm btn-outline-primary" onclick="loadVehicles()">🔄 Refresh</button>
     </div>
-    <input type="text" id="vSearch" class="form-control mb-3 shadow-sm border-info" placeholder="🔍 Search RC Number..." onkeyup="filterVehicles()">
-    <div id="vehicleCardsContainer">
-        <!-- Data load yahan hoga -->
-        <div class="text-center p-5 text-muted">Click refresh to load vehicles...</div>
+
+    <!-- Naya Counter Box -->
+    <div class="row g-2 mb-3 text-center">
+        <div class="col-6">
+            <div class="p-2 border rounded bg-white shadow-sm">
+                <small class="text-success fw-bold">RC UPDATED ✅</small>
+                <h4 id="count-done" class="mb-0 text-success">0</h4>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="p-2 border rounded bg-white shadow-sm">
+                <small class="text-danger fw-bold">RC PENDING ❌</small>
+                <h4 id="count-pending" class="mb-0 text-danger">0</h4>
+            </div>
+        </div>
     </div>
+
+    <input type="text" id="vSearch" class="form-control mb-3 shadow-sm" placeholder="🔍 Search Gaadi No..." onkeyup="filterVehicles()">
+    <div id="vehicleCardsContainer"></div>
 </div>
+
 
 <!-- SLIP HISTORY SECTION -->
 <div id="slip-history-section" class="app-section hidden">
@@ -414,25 +430,39 @@
     <img src="Images/Background.png" class="watermark-img">
 </div>
 
-        <!-- Top Header: Contacts & Logo -->
-        <div class="c-header">
-            <div class="c-contact-left">
-                <span class="c-owner">Munna Bhai</span><br>
-                <i class="bi bi-telephone-fill"></i> 9673732113 | 9622247911
-            </div>
-            <div class="c-logo-section">
-                <div class="c-atc-badge">
-                    <span>A</span><span>T</span><span>C</span>
-                </div>
-                <h1 class="c-company-title">ALLINDIA TRANSPORT COMPANY</h1>
-                <div class="c-sub-text">VEGETABLE SUPPLIERS & COMMISSION AGENT</div>
-            </div>
-            <div class="c-contact-right text-end">
-                <span class="c-owner">Asif Bhai</span><br>
-                <i class="bi bi-telephone-fill"></i> 7030732113 | 8888664019
-            </div>
+       <!-- TOP HEADER: CONTACTS & LOGOS -->
+<div class="c-header">
+    <!-- LEFT SIDE: MUNNA BHAI + TRUCK LOGO -->
+    <div class="c-contact-left">
+        <div class="contact-top-row">
+            <span class="c-owner">Munna Bhai</span><br>
+            <i class="bi bi-telephone-fill"></i> 9673732113 | 9622247911
         </div>
+        <div class="logo-row-left">
+            <img src="Images/Truck.png" class="header-side-img">
+        </div>
+    </div>
 
+    <!-- CENTER: ATC BRANDING -->
+    <div class="c-logo-section">
+        <div class="c-atc-badge">
+            <span>A</span><span>T</span><span>C</span>
+        </div>
+        <h1 class="c-company-title">ALLINDIA TRANSPORT COMPANY</h1>
+        <div class="c-sub-text">VEGETABLE SUPPLIERS & COMMISSION AGENT</div>
+    </div>
+
+    <!-- RIGHT SIDE: ASIF BHAI + ATC LOGO -->
+    <div class="c-contact-right">
+        <div class="contact-top-row">
+            <span class="c-owner">Asif Bhai</span><br>
+            <i class="bi bi-telephone-fill"></i> 7030732113 | 8888664019
+        </div>
+        <div class="logo-row-right">
+            <img src="Images/ATC_Logo.png" class="header-side-img">
+        </div>
+    </div>
+</div>
         <!-- Is line ko Select Trip waale div ke niche add karein -->
 <input type="hidden" id="slip_rowNum">
 
@@ -487,9 +517,16 @@
                     </thead>
                     <tbody>
                         <tr>
-                            <td>FREIGHT CHARGES <small>(Rate: <input type="number" id="slip_rate" oninput="calculateSlip()" style="width:60px; border-bottom:1px solid #ddd;"> | Wt: <input type="number" id="slip_weight" oninput="calculateSlip()" style="width:60px; border-bottom:1px solid #ddd;"> KG)</small></td>
-                            <td class="text-end"><input type="text" id="slip_freight" readonly class="fw-bold"></td>
-                        </tr>
+    <td>
+        FREIGHT CHARGES 
+        <small>(Rate: <input type="number" id="slip_rate" oninput="calculateSlip()" style="width:70px; border-bottom:1px solid #ddd;"> 
+        | Weight: <input type="number" step="0.001" id="slip_weight" oninput="calculateSlip()" style="width:80px; border-bottom:1px solid #ddd;"> TON)</small>
+    </td>
+    <td class="text-end">
+        <!-- 'readonly' hata diya hai taaki direct amount bhi daal sakein -->
+        <input type="number" id="slip_freight" oninput="calculateTotalFromManual()" class="fw-bold">
+    </td>
+</tr>
                         <tr>
                             <td>LESS: ADVANCE RECEIVED</td>
                             <td class="text-end"><input type="number" id="slip_advance" oninput="calculateSlip()" class="text-danger"></td>

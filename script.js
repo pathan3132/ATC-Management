@@ -668,11 +668,11 @@ async function fetchVehicleHistory(vNo) {
 
 
 async function fetchVehicleDocs(vNo) {
-    const safeId = vNo.replace(/\s+/g, '_');
+    const safeId = vNo.replace(/\s+/g, '_'); // ID dhoondhne ke liye space hatayein
     const docContainer = document.getElementById(`docList_${safeId}`);
     if(!docContainer) return;
 
-    docContainer.innerHTML = '<small class="text-muted">Searching Docs...</small>';
+    docContainer.innerHTML = 'Loading docs...';
     
     try {
         const res = await fetch(scriptURL + `?action=getDocs&vNo=${encodeURIComponent(vNo)}`);
@@ -683,12 +683,9 @@ async function fetchVehicleDocs(vNo) {
             docContainer.innerHTML = '<small class="text-muted">No documents found.</small>';
         } else {
             docs.forEach(doc => {
-                // Name check: Agar name nahi hai toh 'View Document' dikhaye
-                let fileName = doc.name && doc.name !== "Unnamed File" ? doc.name : "View Document";
-                
                 docContainer.insertAdjacentHTML('beforeend', `
                     <a href="${doc.url}" target="_blank" class="doc-link-item d-block p-1 small">
-                        <i class="bi bi-file-earmark-text text-primary"></i> ${fileName}
+                        <i class="bi bi-file-earmark-text"></i> ${doc.name}
                     </a>
                 `);
             });
@@ -849,17 +846,42 @@ function fillSlipFromSelection() {
 // 3. Calculation
 // --- UPDATED LOADING SLIP CALCULATION ---
 function calculateSlip() {
-    let rate = parseFloat(document.getElementById('slip_rate').value) || 0;     // Per Ton
-    let weight = parseFloat(document.getElementById('slip_weight').value) || 0; // In KG
+    let rate = parseFloat(document.getElementById('slip_rate').value) || 0;     // Per Ton Rate
+    let weight = parseFloat(document.getElementById('slip_weight').value) || 0; // In Tons (e.g. 30.250)
+    
+    // Freight = Rate * Weight (Tons)
+    let freight_total = Math.round(weight * rate);
+    
+    // Agar Rate aur Weight dala hai, toh Freight auto-fill karein
+    if(rate > 0 && weight > 0) {
+        document.getElementById('slip_freight').value = freight_total;
+    }
+    
+    updateFinalNetPayable();
+}
+
+// 2. Agar user direct Bhada (Freight) likhna chahe toh ye kaam karega
+function calculateTotalFromManual() {
+    updateFinalNetPayable();
+}
+
+// 3. Final calculation logic
+function updateFinalNetPayable() {
+    let freight = parseFloat(document.getElementById('slip_freight').value) || 0;
     let adv = parseFloat(document.getElementById('slip_advance').value) || 0;
     let dPrice = parseFloat(document.getElementById('slip_dPrice').value) || 0;
 
-    // Standard Logic: Freight = (Weight in KG / 1000) * Rate per Ton
-    let freight_total = (weight / 1000) * rate; 
-    let toPay = (freight_total - adv) + dPrice;
+    // Net Payable = Freight - Advance + Driver Price
+    let toPay = (freight - adv) + dPrice;
 
-    document.getElementById('slip_freight').value = Math.round(freight_total);
     document.getElementById('slip_toPay').value = Math.round(toPay);
+}
+
+// --- AUTOMATIC CAPITAL DATA SAVE ---
+// Sabhi inputs ko save karte waqt capital mein convert karne ke liye function
+function getInputValueCaps(id) {
+    let val = document.getElementById(id).value;
+    return val ? val.toUpperCase().trim() : "";
 }
 
 // Timing Suffix (Auto 'Hr' add karna)
@@ -884,25 +906,44 @@ async function generateBeeltyPDF() {
     if(!vNo || vNo === "N/A") return alert("Data select karein!");
 
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving & Clearing...';
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Generating PDF...';
 
-    // PDF Settings (Pehle ki tarah)
+    // --- FIX: MOBILE SCALING ISSUES ---
+    // Capture se pehle mobile scale hatana zaroori hai
+    const originalTransform = element.style.transform;
+    const originalMargin = element.style.margin;
+    const originalPosition = element.style.position;
+
+    element.style.transform = "none"; // Scale reset to 100%
+    element.style.margin = "0 auto";
+    element.style.position = "relative";
+    element.style.width = "794px"; // Standard A4 Width
+
     const opt = {
         margin: 0,
         filename: `Slip_${vNo}.pdf`,
-        image: { type: 'jpeg', quality: 1 },
-        html2canvas: { scale: 2, useCORS: true, scrollY: 0, windowWidth: 800 },
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { 
+            scale: 2, // Achhi quality ke liye
+            useCORS: true, 
+            logging: false,
+            letterRendering: true,
+            scrollX: 0,
+            scrollY: 0,
+            width: 794 // Capture width fix kar di
+        },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
     try {
-        const originalTransform = element.style.transform;
-        element.style.transform = "none";
-        
+        // PDF Generate karein
         const pdfWorker = html2pdf().set(opt).from(element);
         const pdfBase64 = await pdfWorker.outputPdf('datauristring').then(res => res.split(',')[1]);
+        
+        // Save PDF to Device
         await pdfWorker.save();
 
+        // Google Sheet mein data save karne ka payload
         const payload = {
             action: "saveLoadingSlip",
             rowNumber: document.getElementById('slip_rowNum').value,
@@ -924,23 +965,27 @@ async function generateBeeltyPDF() {
             licenceNo: document.getElementById('slip_licence').value
         };
 
-        const res = await fetch(scriptURL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
+        // Server par bhejein
+        await fetch(scriptURL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
 
-        alert("✅ Beelty Saved to New Sheet & Data_log Marked!");
-
-        // --- FORM AUR SEARCH CLEAR LOGIC ---
+        alert("✅ PDF Saved Successfully!");
         resetBeeltyForm();
-        
-        element.style.transform = originalTransform;
         showSection('slip-history');
 
     } catch (e) {
+        console.error(e);
         alert("Error: " + e.message);
     } finally {
+        // --- RESTORE: Mobile View wapas set karein ---
+        element.style.transform = originalTransform;
+        element.style.margin = originalMargin;
+        element.style.position = originalPosition;
+
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-cloud-arrow-up-fill me-2"></i> FINALIZE, SAVE & WHATSAPP';
     }
 }
+
 
 // Search field aur form reset karne ka naya function
 function resetBeeltyForm() {
@@ -1083,45 +1128,54 @@ async function loadSlipHistory() {
 }
 
 // --- DRIVE SE ASLI PDF FILE SHARE KARNA ---
+// --- DRIVE SE ASLI PDF FILE SHARE KARNA (Fixed Version) ---
 async function shareFileFromDrive(fileId, fileName) {
     const originalBtn = event.currentTarget;
     const originalHtml = originalBtn.innerHTML;
+    
+    // UI Feedback
     originalBtn.disabled = true;
     originalBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
 
     try {
+        // 1. Apps Script se Base64 data mangwayein
         const response = await fetch(scriptURL + `?action=getFileContent&fileId=${fileId}`);
-        const base64 = await response.text();
+        if (!response.ok) throw new Error("File fetch failed");
+        const base64Data = await response.text();
 
-        const byteCharacters = atob(base64);
+        // 2. Base64 ko Blob mein badlein
+        const byteCharacters = atob(base64Data);
         const byteNumbers = new Array(byteCharacters.length);
         for (let i = 0; i < byteCharacters.length; i++) {
             byteNumbers[i] = byteCharacters.charCodeAt(i);
         }
         const byteArray = new Uint8Array(byteNumbers);
         const blob = new Blob([byteArray], { type: 'application/pdf' });
-        const file = new File([blob], fileName, { type: 'application/pdf' });
 
-        // Check if HTTPS and Share is supported
-        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        // 3. Blob se File Object banayein
+        const file = new File([blob], `${fileName}.pdf`, { type: 'application/pdf' });
+
+        // 4. Web Share API check karein (Sirf HTTPS par chalta hai)
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({
                 files: [file],
                 title: 'ATC Loading Slip',
+                text: 'Loading Slip for Vehicle: ' + fileName
             });
         } else {
-            // AGAR SHARE SUPPORT NAHI HAI (HTTP PAR) TO DOWNLOAD KARO
+            // FALLBACK: Agar share support nahi hai (jaise local network par), toh DOWNLOAD karwao
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = fileName;
+            link.download = `${fileName}.pdf`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             
-            alert("Local Network (HTTP) par direct share block hai. File DOWNLOAD ho gayi hai, ab aap ise WhatsApp par bhej sakte hain.");
+            alert("Security ki wajah se direct share block hai. File DOWNLOAD ho gayi hai, ab aap ise WhatsApp par bhej sakte hain.");
         }
     } catch (err) {
-        console.error(err);
-        alert("Action failed. Please try again.");
+        console.error("Share Error:", err);
+        alert("File share nahi ho saki. Internet connection check karein.");
     } finally {
         originalBtn.disabled = false;
         originalBtn.innerHTML = originalHtml;
@@ -1164,33 +1218,53 @@ async function shareActualFile(id) {
 // --- GAADI MASTER: VEHICLE LIST LOAD KARNA ---
 async function loadVehicles() {
     const container = document.getElementById('vehicleCardsContainer');
-    container.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-info"></div><br>Loading...</div>';
+    if(!container) return;
+
+    container.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary spinner-border-sm"></div><br>Checking Documents...</div>';
     
     try {
-        const response = await fetch(scriptURL + "?action=getVehicles");
-        const vehicles = await response.json();
+        // 1. Gaadiyon ki list aur Uploaded list dono ek saath mangwayein
+        const [resVehicles, resUploaded] = await Promise.all([
+            fetch(scriptURL + "?action=getVehicles"),
+            fetch(scriptURL + "?action=getUploadedList")
+        ]);
+
+        const allVehicles = await resVehicles.json();
+        const uploadedList = await resUploaded.json();
+
+        // 2. Counters Calculate karein
+        let done = 0;
+        let pending = 0;
         container.innerHTML = '';
 
-        vehicles.forEach((vNo) => {
-            // Space hatakar safe ID banayein (e.g. RJ_02_GD_1022)
+        allVehicles.forEach((vNo) => {
             const safeId = vNo.replace(/\s+/g, '_'); 
+            const isUploaded = uploadedList.includes(vNo); // Check if uploaded
+            
+            if(isUploaded) done++; else pending++;
+
+            // 3. Gaadi Number par Mark lagayein
+            const statusMark = isUploaded 
+                ? '<span class="badge bg-success-subtle text-success ms-2" style="font-size:10px;"><i class="bi bi-check-circle-fill"></i> RC OK</span>' 
+                : '<span class="badge bg-danger-subtle text-danger ms-2" style="font-size:10px;"><i class="bi bi-exclamation-circle"></i> NO RC</span>';
 
             container.insertAdjacentHTML('beforeend', `
-                <div class="v-list-item shadow-sm mb-3">
-                    <div class="v-item-header" onclick="toggleDetails('details_${safeId}', '${vNo}')">
-                        <span><i class="bi bi-truck me-2"></i> ${vNo}</span>
-                        <i class="bi bi-chevron-down"></i>
+                <div class="v-list-item shadow-sm mb-3" style="background: white; border-radius: 12px; border-left: 5px solid ${isUploaded ? '#28a745' : '#dc3545'}; overflow: hidden;">
+                    <div class="v-item-header p-3 d-flex justify-content-between align-items-center" onclick="toggleDetails('details_${safeId}', '${vNo}')" style="cursor:pointer;">
+                        <div>
+                            <span class="fw-bold" style="color: #003366;"><i class="bi bi-truck me-1"></i> ${vNo}</span>
+                            ${statusMark}
+                        </div>
+                        <i class="bi bi-chevron-down text-muted"></i>
                     </div>
                     
-                    <div id="details_${safeId}" class="v-item-details hidden">
+                    <div id="details_${safeId}" class="v-item-details hidden p-3 border-top bg-light">
                         <div id="stats_${safeId}" class="row g-2 mb-3 mt-1 text-center small text-muted">Calculating...</div>
-                        
                         <div class="d-flex gap-2 mb-3">
-                            <button class="btn btn-sm btn-primary w-50" onclick="triggerUpload('${vNo}')">Upload RC</button>
+                            <button class="btn btn-sm btn-primary w-50" onclick="triggerUpload('${vNo}')">Update RC</button>
                             <input type="file" id="file_${vNo}" class="hidden" onchange="uploadFile(this, '${vNo}')">
                             <button class="btn btn-sm btn-outline-info w-50" onclick="fetchVehicleDocs('${vNo}')">Docs</button>
                         </div>
-
                         <div id="docList_${safeId}" class="mb-3"></div>
                         <h6 class="fw-bold small border-bottom pb-1">History</h6>
                         <div id="historyList_${safeId}" class="history-container small text-muted">Loading...</div>
@@ -1198,14 +1272,22 @@ async function loadVehicles() {
                 </div>
             `);
         });
-    } catch (e) { container.innerHTML = 'Error loading vehicles.'; }
+
+        // Counters Update karein
+        document.getElementById('count-done').innerText = done;
+        document.getElementById('count-pending').innerText = pending;
+
+    } catch (e) { 
+        container.innerHTML = '<div class="text-center p-3 text-danger">Error: Sheet "Vehicle_Docs" check karein ya Deploy firse karein.</div>'; 
+    }
 }
 
-// Toggle Details Update
+// Toggle logic (Simple & Auto-load)
 function toggleDetails(id, vNo) {
     const el = document.getElementById(id);
     if(el.classList.contains('hidden')) {
         el.classList.remove('hidden');
+        // Click karte hi apne aap load hoga
         fetchVehicleDocs(vNo);
         fetchVehicleHistory(vNo);
     } else {

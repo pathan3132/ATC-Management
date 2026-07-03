@@ -1522,3 +1522,170 @@ body { background-color: #f4f7f9; font-family: 'Segoe UI', Roboto, sans-serif; }
     padding: 2px 5px;
     border-radius: 4px;
 }
+
+.text-navy { color: #003366; }
+
+.v-list-item {
+    transition: 0.3s;
+    border: 1px solid #eee;
+}
+
+.bg-success-subtle { background-color: #e8f5e9 !important; border: 1px solid #c8e6c9; }
+.bg-danger-subtle { background-color: #ffebee !important; border: 1px solid #ffcdd2; }
+
+/* Sorting container fix */
+#vehicleCardsContainer {
+    display: flex;
+    flex-direction: column;
+}
+
+.border-start-4 {
+    border-left-width: 5px !important;
+}
+
+/* Priority sorting style */
+.v-list-item[style*="order: -1"] {
+    background: #f8fbff; /* Uploaded gaadiyon ka background halka blue */
+}
+
+/* --- CAPITAL LETTERS FOR ALL INPUTS --- */
+.corporate-beelty input, 
+.corporate-beelty textarea {
+    text-transform: uppercase; /* Likhte waqt screen par capital dikhega */
+}
+
+/* --- HEADER ALIGNMENT FIX --- */
+.c-header { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; /* Vertical center alignment */
+    border-bottom: 4px solid var(--atc-navy); 
+    padding-bottom: 15px; 
+}
+
+.c-contact-left, .c-contact-right { 
+    flex: 1; 
+    font-size: 13px; 
+    font-weight: 700; 
+    color: var(--atc-navy); 
+    line-height: 1.4; /* Better spacing for numbers */
+}
+
+.c-contact-left { text-align: left; }
+.c-contact-right { text-align: right; }
+
+.c-logo-section { 
+    flex: 2; 
+    text-align: center; 
+}
+
+/* Freight field ko editable banane ke liye style */
+#slip_freight {
+    background: #fff;
+    border-bottom: 2px solid #03a9f4 !important;
+}
+
+/* --- UPDATED PROFESSIONAL HEADER --- */
+.c-header { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: flex-start;
+    border-bottom: 4px solid var(--atc-navy); 
+    padding: 5px 0 20px 0; /* 10 se badha kar 20 kiya, taaki line niche jaye */
+    margin-bottom: 10px;   /* Line aur niche ke blue bar mein gap maintain rahe */
+}
+
+.c-contact-left, .c-contact-right { 
+    flex: 1; 
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    height: 100%;
+}
+
+.contact-top-row {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--atc-navy);
+    line-height: 1.2;
+    margin-bottom: 10px; /* Text aur logo ke beech gap */
+}
+
+.c-logo-section { 
+    flex: 1.8; 
+    text-align: center;
+    padding-top: 10px;
+}
+
+/* Logos Positioning */
+.logo-row-left { text-align: left; }
+.logo-row-right { text-align: right; }
+
+.header-side-img {
+    height: 75px; /* Logos ka size yahan se adjust karein */
+    width: auto;
+    object-fit: contain;
+    margin-top: 5px;
+}
+
+/* Input Fields automatically Capital */
+.corporate-beelty input {
+    text-transform: uppercase;
+}
+
+/* Center Branding Scaling */
+.c-company-title {
+    font-size: 24px;
+    margin-top: 5px;
+}
+
+/* --- VEGETABLE LINE SINGLE LINE FIX --- */
+.c-sub-text {
+    font-size: 10px; /* Thoda chota kiya taaki fit ho jaye */
+    font-weight: 800;
+    color: var(--atc-gold);
+    letter-spacing: 1px; /* Spacing kam ki taaki single line mein aaye */
+    text-align: center;
+    white-space: nowrap; /* Isse line kabhi break nahi hogi */
+    display: block;
+    margin-top: 2px;
+    width: 100%;
+}
+
+/* Center Section ki width thodi badha dete hain taaki jagah mile */
+.c-logo-section { 
+    flex: 2.5; /* Center ko thodi zyada jagah di */
+    text-align: center;
+    padding-top: 5px;
+}
+
+.c-company-title {
+    font-size: 22px; /* Title size perfect adjustment */
+    margin: 2px 0;
+    white-space: nowrap;
+}
+
+/* Blue Bar (Vehicle/Date) ka margin */
+.c-info-bar { 
+    display: flex; 
+    justify-content: space-between; 
+    background: var(--atc-navy); 
+    padding: 12px 25px; 
+    margin-top: 1px;   /* Upar ki line se thoda sate rahe */
+    border-radius: 8px; 
+    color: white;
+}
+
+/* Party Name section ka gap kam karne ke liye */
+.c-party-section { 
+    margin-top: 8px;   /* 25px se kam karke 8px kar diya */
+    padding: 5px 0;    /* Padding bhi kam ki taaki gap na dikhe */
+    border-bottom: 2px solid #edf2f7; 
+}
+
+.c-party-section label { 
+    font-weight: 800; 
+    font-size: 11px;   /* Label thoda aur sleek kiya */
+    color: #4a5568; 
+    display: block; 
+}
