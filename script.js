@@ -1,3 +1,4 @@
+let allTripsData = []; // Saara data store karne ke liye
 // --- LOCAL DATABASE SETUP (IndexedDB) ---
 let db;
 const request = indexedDB.open("ATC_Slips_DB", 1);
@@ -73,7 +74,12 @@ window.onload = () => {
     checkLoginStatus();
     updateGreeting();
     loadHomeRecent();
-    // Clock update har minute
+    // Background mein saara data pehle hi kheench lo taaki history turant dikhe
+    fetch(scriptURL)
+        .then(res => res.json())
+        .then(data => { allTripsData = data; })
+        .catch(e => console.log("Data load error"));
+
     setInterval(() => {
         const timeEl = document.getElementById('homeTime');
         if(timeEl) timeEl.innerText = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -181,15 +187,17 @@ async function loadHomeRecent() {
         
         const todayStr = new Date().toLocaleDateString('en-GB').replace(/\//g, '-'); // DD-MM-YYYY format match karein
 
-        data.forEach((trip, index) => {
-            let isCollected = (String(trip['_colG'] || "").toLowerCase().trim() === "yes");
-            let amt = parseFloat(trip['Amount']) || 0;
-            
-            // Stats Calculations
-            if(trip['Date'] === todayStr) {
-                todayBiz += amt;
-                todayCount++;
-            }
+       data.forEach((trip, index) => {
+    let isCollected = (String(trip['_colG'] || "").toLowerCase().trim() === "yes");
+    let amt = parseFloat(trip['Amount']) || 0;
+    
+    // Date comparison (Sheet date string vs Today's string)
+    let tripDateStr = String(trip['Date']).replace(/-/g, '/'); // Dash ko slash me badlein
+    if(tripDateStr === todayFormatted) {
+        todayBiz += amt;
+        todayCount++;
+    }
+
             if(!isCollected) pendingCount++;
 
             // Sirf aakhri 5 trips Home par dikhao
@@ -235,13 +243,15 @@ function toggleAmountVisibility() {
 // Date ko sahi format mein badalne ke liye helper function
 function parseSheetDate(dateStr) {
     if (!dateStr) return null;
-    // Agar date DD-MM-YYYY format mein hai (e.g. 23-06-2026)
-    let parts = dateStr.split('-');
+    // Agar date string hai, to use / ya - se split karein
+    let parts = String(dateStr).split(/[-/]/);
     if (parts.length === 3) {
-        // parts[2] = Year, parts[1]-1 = Month (0-11), parts[0] = Day
+        // Parts order: [DD, MM, YYYY]
+        // Note: Month 0-indexed hota hai isliye -1 kiya hai
         return new Date(parts[2], parts[1] - 1, parts[0]);
     }
-    return new Date(dateStr); // Fallback agar format alag ho
+    let d = new Date(dateStr);
+    return isNaN(d.getTime()) ? null : d;
 }
 
 // --- VIEW ALL TRIPS (Updated with Collector Name) ---
@@ -361,30 +371,83 @@ async function loadTrips() {
 }
 
 // WhatsApp Share
-// --- STYLISH WHATSAPP SHARE ---
-function shareTrip(phone, vNo, from, to, party, amt, date, material, weight) {
-    // Stylish Message Formatting
-    let msg = `🚛 *ATC TRIP DETAILS* 🚛%0A` +
-              `--------------------------%0A` +
-              `📅 *Date:* ${date}%0A` +
-              `🔢 *Vehicle:* ${vNo}%0A` +
-              `📍 *Route:* ${from} ➔ ${to}%0A` +
-              `🏢 *Party:* ${party}%0A` +
-              `📦 *Material:* ${material || '-'}%0A` +
-              `⚖️ *Weight:* ${weight || '-'} Ton%0A` +
-              `💰 *Amount:* ₹${amt}%0A` +
-              `--------------------------%0A` +
-              `*ATC ALLINDIA TRANSPORT*`;
-
-    // Phone number cleaning logic
+async function shareTrip(phone, vNo, from, to, party, amt, date, material, weight) {
+    // 1. Phone number cleaning
     let cleanPhone = String(phone || "").replace(/\D/g, '');
+    let last10Digits = cleanPhone.slice(-10);
 
-    if (cleanPhone.length >= 10) {
-        if (cleanPhone.length === 10) cleanPhone = "91" + cleanPhone;
-        window.open(`https://wa.me/${cleanPhone}?text=${msg}`, '_blank');
-    } else {
-        // Agar number nahi hai toh contact list khulegi select karne ke liye
-        window.open(`https://wa.me/?text=${msg}`, '_blank');
+    // 2. History Calculation with Destinations (From/To)
+    let historyList = "";
+    let oldPendingAmt = 0;
+    let pendingTripsCount = 0;
+
+    if (allTripsData && allTripsData.length > 0) {
+        allTripsData.forEach(t => {
+            let tPhoneD = String(t['Driver No'] || "").replace(/\D/g, '').slice(-10);
+            let tPhoneO = String(t['_owner'] || "").replace(/\D/g, '').slice(-10);
+            let isCollected = (String(t['_colG'] || "").toLowerCase().trim() === "yes");
+
+            // Agar number match kare aur payment pending ho
+            if ((tPhoneD === last10Digits || tPhoneO === last10Digits) && !isCollected) {
+                // Check karein ki ye current trip toh nahi hai
+                if (!(t['Vehicle No'] === vNo && t['Date'] === date)) {
+                    let v = String(t['Vehicle No']).replace(/&/g, "and");
+                    let f = String(t['From'] || "N/A").replace(/&/g, "and");
+                    let rt = String(t['To'] || "N/A").replace(/&/g, "and");
+                    let a = parseFloat(t['Amount'] || 0);
+                    let dt = t['Date'] || "No Date";
+
+                    // Designing each old trip entry
+                    historyList += `▪️ *${v}* (${dt})\n`;
+                    historyList += `   📍 ${f} ➔ ${rt}\n`; // Destinations added here
+                    historyList += `   💰 Fare: ₹${a}\n\n`;
+
+                    oldPendingAmt += a;
+                    pendingTripsCount++;
+                }
+            }
+        });
+    }
+
+    let currentAmt = parseFloat(amt || 0);
+    let totalOutstanding = currentAmt + oldPendingAmt;
+
+    // 3. Message Body Design
+    let messageBody = `🏢 *ATC ALLINDIA TRANSPORT*
+_Munna Bhai & Asif Bhai_
+==========================
+📍 *CURRENT TRIP DETAILS*
+📅 Date: ${date}
+🚚 Vehicle: *${vNo}*
+🛣️ Route: ${from} To ${to}
+💰 Fare: *₹${currentAmt}*
+
+${pendingTripsCount > 0 ? `⚠️ *OLD PENDING TRIPS (${pendingTripsCount})*
+--------------------------
+${historyList}--------------------------` : ''}
+
+📊 *FINANCIAL SUMMARY*
+Old Balance: ₹${oldPendingAmt}
+Current Fare: ₹${currentAmt}
+━━━━━━━━━━━━━━━━━━
+🛑 *TOTAL PAYABLE: ₹${totalOutstanding}*
+━━━━━━━━━━━━━━━━━━
+
+💸 *PAYMENT INSTRUCTIONS*
+Commission bhej kar SS dein:
+📲 UPI: *8888664019*
+
+_Thank you for choosing ATC!_`;
+
+    // 4. Proper Encoding (Taki message na kate)
+    let encodedMsg = encodeURIComponent(messageBody);
+    let whatsappURL = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedMsg}`;
+
+    // 5. Open WhatsApp
+    try {
+        window.location.href = whatsappURL;
+    } catch (e) {
+        window.open(whatsappURL, '_blank');
     }
 }
 
@@ -421,6 +484,7 @@ async function loadTrips() {
     try {
         const response = await fetch(scriptURL);
         const allData = await response.json();
+        allTripsData = allData;
         
         // --- DATE FILTER LOGIC ---
         const data = allData.filter(trip => isDateInRange(trip['Date'], startVal, endVal));
@@ -442,7 +506,8 @@ async function loadTrips() {
 
         let tCount = 0, colCount = 0, penCount = 0;
         const today = new Date();
-        today.setHours(0, 0, 0, 0);
+const todayFormatted = today.toLocaleDateString('en-GB'); // Ye "DD/MM/YYYY" deta hai
+
 
         data.forEach(trip => {
             // Data Mapping as per your Sheet Headers
