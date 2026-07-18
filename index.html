@@ -13,6 +13,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="apple-touch-icon" href="Images/ATC_Logo.png">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<!-- Party Ledger Statement PDF: jsPDF + autoTable (draws real text, no screenshot rendering) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 
 <!-- Service Worker Registration -->
 <script>
@@ -37,12 +40,15 @@
                 <a href="#" class="list-group-item p-3" onclick="showSection('new-trip')"><i class="bi bi-plus-circle me-2 text-primary"></i> New Trip Entry</a>
                 <a href="#" class="list-group-item p-3" onclick="showSection('view-trips')"><i class="bi bi-truck me-2 text-warning"></i> View All Trips</a>
                 <a href="#" class="list-group-item p-3" onclick="showSection('accounts')"><i class="bi bi-wallet2 me-2 text-success"></i> Hisaab-Kitaab</a>
+                <a href="#" class="list-group-item p-3" onclick="showSection('party-ledger')"><i class="bi bi-journal-bookmark-fill me-2 text-primary"></i> Party Ledger (Khata)</a>
+                <a href="#" class="list-group-item p-3" onclick="showSection('owner-ledger')"><i class="bi bi-person-vcard-fill me-2 text-warning"></i> Owner Ledger (Gadi Malik)</a>
                <a href="#" class="list-group-item p-3" onclick="showSection('loading-slip')">
     <i class="bi bi-file-earmark-pdf me-2 text-danger"></i> Generate Loading Slip (Beelty)
 </a>
 <a href="#" class="list-group-item p-3" onclick="showSection('slip-history')">
-    <i class="bi bi-folder-check me-2 text-warning"></i> Slip Archive (Saved PDFs)
+    <i class="bi bi-folder-check me-2 text-warning"></i> Loading Slip
 </a>
+
                 <a href="#" class="list-group-item p-3" onclick="showSection('vehicles')">
     <i class="bi bi-folder-check me-2 text-info"></i> Gaadi Documents & History
 </a>
@@ -140,7 +146,7 @@
     <div class="px-3">
         <h6 class="fw-bold mb-3 text-secondary">MAIN SERVICES</h6>
         <div class="row g-3">
-            <div class="col-6">
+            <div class="col-4">
                 <div class="service-card" onclick="showSection('new-trip')">
                     <div class="icon-circle bg-primary-subtle text-primary">
                         <i class="bi bi-plus-square-fill"></i>
@@ -148,7 +154,7 @@
                     <span>New Entry</span>
                 </div>
             </div>
-            <div class="col-6">
+            <div class="col-4">
                 <div class="service-card" onclick="showSection('view-trips')">
                     <div class="icon-circle bg-warning-subtle text-warning">
                         <i class="bi bi-truck-flatbed"></i>
@@ -156,7 +162,7 @@
                     <span>View History</span>
                 </div>
             </div>
-            <div class="col-6">
+            <div class="col-4">
                 <div class="service-card" onclick="showSection('accounts')">
                     <div class="icon-circle bg-success-subtle text-success">
                         <i class="bi bi-wallet-fill"></i>
@@ -164,12 +170,44 @@
                     <span>Ledger</span>
                 </div>
             </div>
-            <div class="col-6">
+            <div class="col-4">
                 <div class="service-card" onclick="showSection('vehicles')">
                     <div class="icon-circle bg-info-subtle text-info">
                         <i class="bi bi-shield-check"></i>
                     </div>
                     <span>Fleet (RC)</span>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="service-card" onclick="showSection('party-ledger')">
+                    <div class="icon-circle bg-primary-subtle text-primary">
+                        <i class="bi bi-journal-bookmark-fill"></i>
+                    </div>
+                    <span>Party Khata</span>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="service-card" onclick="showSection('owner-ledger')">
+                    <div class="icon-circle bg-warning-subtle text-warning">
+                        <i class="bi bi-person-vcard-fill"></i>
+                    </div>
+                    <span>Owner Khata</span>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="service-card" onclick="showSection('loading-slip')">
+                    <div class="icon-circle bg-danger-subtle text-danger">
+                        <i class="bi bi-file-earmark-pdf-fill"></i>
+                    </div>
+                    <span>Loading Slip</span>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="service-card" onclick="showSection('slip-history')">
+                    <div class="icon-circle bg-info-subtle text-info">
+                        <i class="bi bi-folder-check"></i>
+                    </div>
+                    <span>Slip History</span>
                 </div>
             </div>
         </div>
@@ -234,6 +272,287 @@
             <h6 class="fw-bold border-bottom pb-2 mb-3">Money Received By (Collector List)</h6>
             <div id="collector-list" class="list-group shadow-sm">
                 <!-- Collector data yahan aayega -->
+            </div>
+        </div>
+
+        <!-- PARTY LEDGER (TALLY-STYLE KHATA) SECTION -->
+        <div id="party-ledger-section" class="app-section hidden">
+            <h4 class="fw-bold mb-3"><i class="bi bi-journal-bookmark-fill me-2 text-primary"></i>Party Ledger (Khata)</h4>
+
+            <!-- Overall Summary Across All Parties -->
+            <div class="row g-2 mb-3">
+                <div class="col-6">
+                    <div class="card shadow-sm border-0 bg-danger text-white p-2 text-center">
+                        <small class="opacity-75">Total Lena Hai (All Parties)</small>
+                        <h5 id="ledgerAllReceivable" class="mb-0 fw-bold">₹0</h5>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card shadow-sm border-0 bg-success text-white p-2 text-center">
+                        <small class="opacity-75">Total Dena Hai (All Parties)</small>
+                        <h5 id="ledgerAllPayable" class="mb-0 fw-bold">₹0</h5>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Party Picker -->
+            <div id="partyPickerCard" class="filter-card bg-white p-3 rounded-4 shadow-sm mb-3">
+                <label class="small fw-bold d-block mb-2">Select / Add Party</label>
+                <div class="input-group">
+                    <input type="text" id="ledgerPartyInput" class="form-control" list="partyListOptions" placeholder="Party ka naam likhein..." onkeyup="if(event.key==='Enter') openPartyLedger();">
+                    <datalist id="partyListOptions"></datalist>
+                    <button class="btn btn-primary fw-bold" onclick="openPartyLedger()"><i class="bi bi-search"></i> Open</button>
+                </div>
+                <input type="text" id="partyChipSearch" class="form-control form-control-sm mt-2" placeholder="🔍 Party list mein search karein..." onkeyup="filterPartyChips()">
+                <div id="partyChipsRow" class="d-flex flex-wrap gap-2 mt-3"><!-- Quick party chips --></div>
+            </div>
+
+            <!-- Ledger View (hidden until a party is opened) -->
+            <div id="ledgerViewArea" class="hidden">
+                <div class="card shadow-sm border-0 mb-3 text-white p-3 d-flex flex-row justify-content-between align-items-center" style="background: linear-gradient(45deg, #003366, #0056b3);">
+                    <div>
+                        <small class="opacity-75">Party</small>
+                        <h4 id="ledgerPartyName" class="fw-bold mb-0">-</h4>
+                    </div>
+                    <button class="btn btn-sm btn-light fw-bold" onclick="closePartyLedger()"><i class="bi bi-arrow-left"></i> Badlein</button>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-4">
+                        <div class="card shadow-sm border-0 bg-danger text-white p-2 text-center">
+                            <small class="opacity-75">Total Debit</small>
+                            <h5 id="ledgerTotalDebit" class="mb-0 fw-bold">₹0</h5>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="card shadow-sm border-0 bg-success text-white p-2 text-center">
+                            <small class="opacity-75">Total Credit</small>
+                            <h5 id="ledgerTotalCredit" class="mb-0 fw-bold">₹0</h5>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="card shadow-sm border-0 p-2 text-center" style="background:#003366; color:white;">
+                            <small class="opacity-75">Balance</small>
+                            <h5 id="ledgerBalance" class="mb-0 fw-bold">₹0</h5>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm p-2 mb-2">
+                    <div class="d-flex gap-2 align-items-center flex-wrap">
+                        <label class="small fw-bold text-muted mb-0"><i class="bi bi-funnel-fill text-primary"></i> Statement Period:</label>
+                        <select id="ledgerPdfPeriod" class="form-select form-select-sm" style="width:auto;" onchange="toggleLedgerCustomRange()">
+                            <option value="all" selected>All Time (Poora Ledger)</option>
+                            <option value="this_year">This Year</option>
+                            <option value="last_year">Last Year</option>
+                            <option value="custom">Custom Date Range</option>
+                        </select>
+                        <div id="ledgerCustomRangeBox" class="d-flex gap-2 align-items-center hidden">
+                            <input type="date" id="ledgerPdfFrom" class="form-control form-control-sm" style="width:auto;">
+                            <span class="small text-muted">to</span>
+                            <input type="date" id="ledgerPdfTo" class="form-control form-control-sm" style="width:auto;">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2 mb-3">
+    <!-- WhatsApp Button ko update kiya -->
+    <button class="btn btn-sm btn-outline-success flex-fill" onclick="generateLedgerPDF(true)">
+        <i class="bi bi-whatsapp"></i> WhatsApp PDF
+    </button>
+    <!-- CSV button ko PDF button mein badla -->
+    <button class="btn btn-sm btn-outline-danger flex-fill" onclick="generateLedgerPDF(false)">
+        <i class="bi bi-file-pdf"></i> Download PDF
+    </button>
+</div>
+
+                <!-- Add / Edit Entry Form -->
+                <div class="card shadow-sm border-0 p-3 mb-3 rounded-4">
+                    <h6 id="ledgerFormTitle" class="fw-bold mb-3"><i class="bi bi-plus-circle text-primary me-1"></i>New Entry</h6>
+                    <input type="hidden" id="ledgerEditRow" value="">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="small text-muted">Date</label>
+                            <input type="date" id="ledgerDate" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-6">
+                            <label class="small text-muted">Vehicle No (Optional)</label>
+                            <input type="text" id="ledgerVNo" class="form-control form-control-sm" placeholder="CG 07 CP 3382">
+                        </div>
+                        <div class="col-12">
+                            <label class="small text-muted">Description</label>
+                            <input type="text" id="ledgerDesc" class="form-control form-control-sm" placeholder="e.g. Jalna TO Raipur / Advance Credited">
+                        </div>
+                        <div class="col-6">
+                            <label class="small text-muted text-danger">Debit ₹ (Party ko dena hai)</label>
+                            <input type="number" id="ledgerDebit" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-6">
+                            <label class="small text-muted text-success">Credit ₹ (Party se mila)</label>
+                            <input type="number" id="ledgerCredit" class="form-control form-control-sm">
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2 mt-3">
+                        <button id="ledgerAddBtn" class="btn btn-success flex-fill fw-bold" onclick="addLedgerEntry()">
+                            <i class="bi bi-check-circle me-1"></i> Add To Ledger
+                        </button>
+                        <button id="ledgerCancelEditBtn" class="btn btn-outline-secondary hidden" onclick="cancelLedgerEdit()">Cancel</button>
+                    </div>
+                </div>
+
+                <!-- Search within ledger -->
+                <input type="text" id="ledgerSearch" class="form-control form-control-sm mb-2 shadow-sm" placeholder="🔍 Is party ki entries mein search karein..." onkeyup="filterLedgerRows()">
+
+                <!-- Ledger Table -->
+                <div class="table-responsive shadow-sm rounded-4" style="background:white;">
+                    <table class="table table-sm ledger-table mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Date</th>
+                                <th>Vehicle / Description</th>
+                                <th class="text-end text-danger">Debit</th>
+                                <th class="text-end text-success">Credit</th>
+                                <th class="text-end">Balance</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="ledgerTableBody">
+                            <!-- Rows injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- OWNER LEDGER (LORRY MALIK - COMBINED PROFESSIONAL STATEMENT) SECTION -->
+        <div id="owner-ledger-section" class="app-section hidden">
+            <h4 class="fw-bold mb-3"><i class="bi bi-person-vcard-fill me-2 text-warning"></i>Owner Ledger (Gadi Malik)</h4>
+
+            <!-- Overall Summary Across All Owners (Advance + Commission combined) -->
+            <div class="row g-2 mb-3">
+                <div class="col-6">
+                    <div class="card shadow-sm border-0 bg-danger text-white p-2 text-center">
+                        <small class="opacity-75">Total Lena Hai (All Owners)</small>
+                        <h5 id="ownerAllReceivable" class="mb-0 fw-bold">₹0</h5>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card shadow-sm border-0 bg-success text-white p-2 text-center">
+                        <small class="opacity-75">Total Dena Hai (All Owners)</small>
+                        <h5 id="ownerAllPayable" class="mb-0 fw-bold">₹0</h5>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Owner Picker -->
+            <div id="ownerPickerCard" class="filter-card bg-white p-3 rounded-4 shadow-sm mb-3">
+                <label class="small fw-bold d-block mb-2">Select / Add Owner</label>
+                <div class="input-group">
+                    <input type="text" id="ledgerOwnerInput" class="form-control" list="ownerListOptions" placeholder="Owner ka naam likhein..." onkeyup="if(event.key==='Enter') openOwnerLedger();">
+                    <datalist id="ownerListOptions"></datalist>
+                    <button class="btn btn-primary fw-bold" onclick="openOwnerLedger()"><i class="bi bi-search"></i> Open</button>
+                </div>
+                <input type="text" id="ownerChipSearch" class="form-control form-control-sm mt-2" placeholder="🔍 Owner list mein search karein..." onkeyup="filterOwnerChips()">
+                <div id="ownerChipsRow" class="d-flex flex-wrap gap-2 mt-3"><!-- Quick owner chips --></div>
+            </div>
+
+            <!-- Statement View (hidden until an owner is opened) -->
+            <div id="ownerLedgerViewArea" class="hidden">
+                <div class="card shadow-sm border-0 mb-3 text-white p-3 d-flex flex-row justify-content-between align-items-center" style="background: linear-gradient(45deg, #003366, #0056b3);">
+                    <div>
+                        <small class="opacity-75">Owner Statement</small>
+                        <h4 id="ledgerOwnerName" class="fw-bold mb-0">-</h4>
+                    </div>
+                    <button class="btn btn-sm btn-light fw-bold" onclick="closeOwnerLedger()"><i class="bi bi-arrow-left"></i> Badlein</button>
+                </div>
+
+                <!-- Combined Summary: Advance + Commission + Grand Total -->
+                <div class="row g-2 mb-3">
+                    <div class="col-4">
+                        <div class="card shadow-sm border-0 p-2 text-center" style="background:#e9ecef;">
+                            <small class="text-muted" style="font-size:10px;">Advance Balance</small>
+                            <h6 id="ownerAdvanceBalance" class="mb-0 fw-bold text-dark">₹0</h6>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="card shadow-sm border-0 p-2 text-center" style="background:#fff3cd;">
+                            <small class="text-muted" style="font-size:10px;">Commission Pending</small>
+                            <h6 id="ownerCommissionPending" class="mb-0 fw-bold text-dark">₹0</h6>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="card shadow-sm border-0 p-2 text-center text-white" style="background:#003366;">
+                            <small class="opacity-75" style="font-size:10px;">Grand Total Outstanding</small>
+                            <h6 id="ownerGrandTotal" class="mb-0 fw-bold">₹0</h6>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2 mb-3">
+                    <button class="btn btn-sm btn-outline-success flex-fill" onclick="generateOwnerLedgerPDF(true)">
+                        <i class="bi bi-whatsapp"></i> WhatsApp PDF
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger flex-fill" onclick="generateOwnerLedgerPDF(false)">
+                        <i class="bi bi-file-pdf"></i> Download PDF
+                    </button>
+                </div>
+
+                <!-- Add / Edit Advance Entry Form -->
+                <div class="card shadow-sm border-0 p-3 mb-3 rounded-4">
+                    <h6 id="ownerLedgerFormTitle" class="fw-bold mb-3"><i class="bi bi-plus-circle text-primary me-1"></i>New Advance Entry</h6>
+                    <input type="hidden" id="ownerLedgerEditRow" value="">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="small text-muted">Date</label>
+                            <input type="date" id="ownerLedgerDate" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-6">
+                            <label class="small text-muted">Vehicle No (Optional)</label>
+                            <input type="text" id="ownerLedgerVNo" class="form-control form-control-sm" placeholder="CG 07 CP 3382">
+                        </div>
+                        <div class="col-12">
+                            <label class="small text-muted">Description</label>
+                            <input type="text" id="ownerLedgerDesc" class="form-control form-control-sm" placeholder="e.g. Advance Diya / Extra Payment">
+                        </div>
+                        <div class="col-6">
+                            <label class="small text-muted text-danger">Debit ₹ (Owner ko dena hai)</label>
+                            <input type="number" id="ownerLedgerDebit" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-6">
+                            <label class="small text-muted text-success">Credit ₹ (Owner se mila)</label>
+                            <input type="number" id="ownerLedgerCredit" class="form-control form-control-sm">
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2 mt-3">
+                        <button id="ownerLedgerAddBtn" class="btn btn-success flex-fill fw-bold" onclick="addOwnerLedgerEntry()">
+                            <i class="bi bi-check-circle me-1"></i> Add To Statement
+                        </button>
+                        <button id="ownerLedgerCancelEditBtn" class="btn btn-outline-secondary hidden" onclick="cancelOwnerLedgerEdit()">Cancel</button>
+                    </div>
+                </div>
+
+                <!-- Search within statement -->
+                <input type="text" id="ownerStatementSearch" class="form-control form-control-sm mb-2 shadow-sm" placeholder="🔍 Statement mein search karein..." onkeyup="filterOwnerStatement()">
+
+                <!-- ===== COMBINED STATEMENT TABLE (Advance + Commission, ek saath) ===== -->
+                <div class="table-responsive shadow-sm rounded-4" style="background:white;">
+                    <table class="table table-sm ledger-table mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Vehicle / Description</th>
+                                <th class="text-end text-danger">Debit</th>
+                                <th class="text-end text-success">Credit</th>
+                                <th class="text-end">Balance</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="ownerStatementTableBody">
+                            <!-- Rows injected here -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -380,15 +699,15 @@
 <div id="slip-history-section" class="app-section hidden">
     <div class="container">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h4 class="fw-bold"><i class="bi bi-folder-check text-warning me-2"></i>Slip Archive</h4>
+            <h4 class="fw-bold"><i class="bi bi-folder-check text-warning me-2"></i>Loading Slips</h4>
             <button class="btn btn-sm btn-outline-secondary" onclick="loadSlipHistory()">🔄 Refresh</button>
         </div>
-        <!-- YE ID MATCH HONI CHAHIYE SCRIPT KE SAATH -->
         <div id="slipHistoryList" class="row g-3 pb-5">
-            <!-- JS Data yahan render hoga -->
+            <!-- Data yahan dikhega -->
         </div>
     </div>
 </div>
+
 
 <!-- LOADING SLIP SECTION -->
 <!-- LOADING SLIP SECTION -->

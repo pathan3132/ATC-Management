@@ -751,6 +751,51 @@ label { font-size: 13px; font-weight: bold; color: #555; margin-bottom: 2px; }
     border: 1px solid #edf2f7;
 }
 
+/* --- Party Ledger (Khata) --- */
+.party-chip {
+    background: #f4f7f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    color: #003366;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+}
+.party-chip:hover {
+    background: #003366;
+    color: white;
+}
+.party-chip:hover b {
+    color: white !important;
+}
+
+.ledger-table {
+    font-size: 12px;
+}
+.ledger-table thead {
+    background: #003366;
+    color: white;
+}
+.ledger-table thead th {
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding: 10px 8px;
+    border: none;
+}
+.ledger-table tbody td {
+    padding: 10px 8px;
+    border-bottom: 1px solid #f1f5f9;
+}
+.ledger-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
 .filter-card label {
     font-size: 10px;
     margin-bottom: 4px;
@@ -780,25 +825,34 @@ label { font-size: 13px; font-weight: bold; color: #555; margin-bottom: 2px; }
 /* Service Cards */
 .service-card {
     background: white;
-    padding: 15px;
+    padding: 12px 6px;
     border-radius: 18px;
     text-align: center;
     box-shadow: 0 4px 12px rgba(0,0,0,0.03);
     transition: 0.3s;
     border: 1px solid #f0f0f0;
+    cursor: pointer;
+}
+
+.service-card span {
+    display: block;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #333;
+    line-height: 1.2;
 }
 
 .service-card:active { transform: scale(0.95); }
 
 .icon-circle {
-    width: 45px;
-    height: 45px;
+    width: 42px;
+    height: 42px;
     border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto 10px;
-    font-size: 20px;
+    margin: 0 auto 8px;
+    font-size: 18px;
 }
 
 /* Floating Action Button (FAB) */
@@ -830,7 +884,11 @@ label { font-size: 13px; font-weight: bold; color: #555; margin-bottom: 2px; }
     align-items: center;
     justify-content: space-between;
     border-left: 5px solid #003366;
+    transition: 0.2s;
 }
+.recent-item:active { transform: scale(0.98); }
+.recent-item.status-received { border-left-color: #28a745; }
+.recent-item.status-pending { border-left-color: #dc3545; }
 
 /* BEELTY PRINT STYLES */
 .beelty-container-wrapper {
@@ -1688,4 +1746,21 @@ body { background-color: #f4f7f9; font-family: 'Segoe UI', Roboto, sans-serif; }
     font-size: 11px;   /* Label thoda aur sleek kiya */
     color: #4a5568; 
     display: block; 
+}
+/* ============================================================
+   MOBILE FIX: Prevent iOS Safari auto-zoom on input focus.
+   iOS zooms in automatically when a focused input's font-size
+   is below 16px. Our .form-control-sm and several custom inputs
+   use 12px for a compact look, so we bump the effective font
+   size back to 16px ONLY on small screens, keeping the compact
+   look on desktop. This does not change layout/spacing.
+   ============================================================ */
+@media (max-width: 767px) {
+    input, select, textarea {
+        font-size: 16px !important;
+    }
+    /* Keep visually compact fields readable but not zoom-triggering */
+    .form-control-sm, .c-input-line, .c-input-bold {
+        font-size: 16px !important;
+    }
 }

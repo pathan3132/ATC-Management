@@ -1,0 +1,490 @@
+var SHEET_ID = "1D-0LKTCyKAbOREkpnKInPRWlT9ikRt2W2Po49AnIbR0";
+var MAIN_FOLDER_ID = "1a0dj2lYHt2KZsd5fx6a51QhrmQd7OEWj"; // Documents (RC/Docs) ke liye
+var SLIP_FOLDER_ID = "1VlTuOCl2NxAieP5PF9NcTcNNeIBcXojz"; // Loading Slips (PDFs) ke liye
+
+function doGet(e) {
+  try {
+    return handleGet(e);
+  } catch (err) {
+    return jsonResponse({ error: "Server Error: " + err.toString() });
+  }
+}
+
+function handleGet(e) {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var action = e.parameter.action;
+  var sheet = ss.getSheetByName("Data_log");
+  
+  if (!sheet) return jsonResponse({error: "Data_log sheet not found"});
+  var lastRow = sheet.getLastRow();
+
+  // 1. UNIQUE VEHICLES
+  if (action === "getVehicles") {
+    if (lastRow <= 1) return jsonResponse([]);
+    var values = sheet.getRange(2, 2, lastRow - 1, 1).getValues(); 
+    var vehicles = [...new Set(values.map(r => r[0].toString().trim().toUpperCase()))].filter(v => v !== "");
+    return jsonResponse(vehicles.sort());
+  }
+
+  // 2. GET VEHICLE DOCS (From Vehicle_Docs Sheet - Fixed Undefined)
+  if (action === "getDocs") {
+    var docSheet = ss.getSheetByName("Vehicle_Docs");
+    if (!docSheet || docSheet.getLastRow() < 2) return jsonResponse([]);
+    var data = docSheet.getDataRange().getValues();
+    var searchVNo = e.parameter.vNo.toUpperCase();
+    var docs = [];
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0].toString().toUpperCase() == searchVNo) {
+        docs.push({ 
+          url: data[i][1], 
+          name: data[i][2] || "Unnamed File",
+          date: data[i][3] 
+        });
+      }
+    }
+    return jsonResponse(docs);
+  }
+
+  // 3. VEHICLE HISTORY
+  if (action === "getVehicleHistory") {
+    var searchVNo = e.parameter.vNo.toUpperCase();
+    var dataAll = sheet.getDataRange().getValues();
+    var headers = dataAll[0];
+    var history = [];
+    for (var i = dataAll.length - 1; i >= 1; i--) {
+      if (dataAll[i][1].toString().toUpperCase() === searchVNo) {
+        var obj = {};
+        headers.forEach((h, idx) => {
+          obj[h] = dataAll[i][idx];
+          if (idx === 6) obj["_status"] = dataAll[i][idx];
+        });
+        history.push(obj);
+      }
+    }
+    return jsonResponse(history);
+  }
+
+  // 4. SEARCH TRIPS FOR BEELTY
+  if (action === "getTripsByVehicle") {
+    var vNo = e.parameter.vNo.toUpperCase().trim();
+    var dataAll = sheet.getDataRange().getValues();
+    var headers = dataAll[0];
+    var results = [];
+    for (var i = dataAll.length - 1; i >= 1; i--) {
+      if (dataAll[i][1].toString().toUpperCase().trim() === vNo) {
+        var obj = { rowNumber: i + 1 };
+        headers.forEach((h, index) => { obj[h] = dataAll[i][index]; });
+        results.push(obj);
+      }
+    }
+    return jsonResponse(results);
+  }
+
+  // 5. SLIP ARCHIVE
+  if (action === "listSlips") {
+    var archiveSheet = ss.getSheetByName("Slip_Archive");
+    if (!archiveSheet || archiveSheet.getLastRow() < 2) return jsonResponse([]);
+    var data = archiveSheet.getDataRange().getValues();
+    var list = data.slice(1).reverse().map(row => ({
+        name: row[0], id: row[1],
+        date: Utilities.formatDate(new Date(row[2]), "GMT+5:30", "dd-MM-yyyy"),
+        url: row[3]
+    }));
+    return jsonResponse(list);
+  }
+
+  // 6. PARTY LEDGER: LIST OF ALL PARTIES (with running balance summary)
+  if (action === "getPartyList") {
+    var ledgerSheet = ss.getSheetByName("Party_Ledger");
+    var parties = {}; // name -> {debit, credit}
+    if (ledgerSheet && ledgerSheet.getLastRow() > 1) {
+      var lData = ledgerSheet.getDataRange().getValues();
+      for (var i = 1; i < lData.length; i++) {
+        var pName = lData[i][2] ? lData[i][2].toString().trim() : "";
+        if (!pName) continue;
+        if (!parties[pName]) parties[pName] = { debit: 0, credit: 0 };
+        parties[pName].debit += parseFloat(lData[i][5]) || 0;
+        parties[pName].credit += parseFloat(lData[i][6]) || 0;
+      }
+    }
+    // Data_log ke Party Name column se bhi naam utha lein (auto-suggest ke liye), balance 0 rahega unke liye
+    if (lastRow > 1) {
+      var dData = sheet.getRange(2, 1, lastRow - 1, 13).getValues(); // Column M = Party Name (index 12)
+      dData.forEach(function(r) {
+        var pName = r[12] ? r[12].toString().trim() : "";
+        if (pName && !parties[pName]) parties[pName] = { debit: 0, credit: 0 };
+      });
+    }
+    var list = [];
+    for (var name in parties) {
+      list.push({ name: name, debit: parties[name].debit, credit: parties[name].credit, balance: parties[name].debit - parties[name].credit });
+    }
+    list.sort(function(a, b) { return a.name.localeCompare(b.name); });
+    return jsonResponse(list);
+  }
+
+  // 7. PARTY LEDGER: ENTRIES FOR ONE PARTY
+  if (action === "getPartyLedger") {
+    var ledgerSheet = ss.getSheetByName("Party_Ledger");
+    var searchParty = (e.parameter.party || "").toUpperCase().trim();
+    var entries = [];
+    if (ledgerSheet && ledgerSheet.getLastRow() > 1) {
+      var lData = ledgerSheet.getDataRange().getValues();
+      for (var i = 1; i < lData.length; i++) {
+        var pName = lData[i][2] ? lData[i][2].toString().toUpperCase().trim() : "";
+        if (pName === searchParty) {
+          entries.push({
+            rowNumber: i + 1,
+            srNo: lData[i][0],
+            date: lData[i][1],
+            party: lData[i][2],
+            vNo: lData[i][3],
+            description: lData[i][4],
+            debit: parseFloat(lData[i][5]) || 0,
+            credit: parseFloat(lData[i][6]) || 0
+          });
+        }
+      }
+    }
+    // Chronological order mein sort karein (date ke hisaab se) taaki running balance sahi rahe,
+    // agar date same ho to jis order mein add kiya usi order mein rakhein
+    entries.sort(function(a, b) {
+      var dA = parsePartyDate(a.date), dB = parsePartyDate(b.date);
+      if (dA && dB && dA.getTime() !== dB.getTime()) return dA - dB;
+      return a.rowNumber - b.rowNumber;
+    });
+    return jsonResponse(entries);
+  }
+
+  // 8. OWNER LEDGER: LIST OF ALL OWNERS (advance balance + pending commission)
+  if (action === "getOwnerList") {
+    var headersData = sheet.getDataRange().getValues();
+    var dHeaders = headersData[0];
+    var ownerColIdx = findAnyHeaderIndex(dHeaders, ["Lorry Owner Name", "Owner Name", "Lorry Owner", "Gadi Malik", "Gadi Malik Name"]);
+
+    var owners = {}; // name -> {debit, credit, pendingCommission}
+
+    // 8a. Advance ledger totals (Owner_Ledger sheet)
+    var ownerLedgerSheet = ss.getSheetByName("Owner_Ledger");
+    if (ownerLedgerSheet && ownerLedgerSheet.getLastRow() > 1) {
+      var olData = ownerLedgerSheet.getDataRange().getValues();
+      for (var i = 1; i < olData.length; i++) {
+        var oName = olData[i][2] ? olData[i][2].toString().trim() : "";
+        if (!oName) continue;
+        if (!owners[oName]) owners[oName] = { debit: 0, credit: 0, pendingCommission: 0 };
+        owners[oName].debit += parseFloat(olData[i][5]) || 0;
+        owners[oName].credit += parseFloat(olData[i][6]) || 0;
+      }
+    }
+
+    // 8b. Pending commission per owner (Data_log: col F amount, col G received Yes/No)
+    if (ownerColIdx > -1 && lastRow > 1) {
+      for (var r = 1; r < headersData.length; r++) {
+        var row = headersData[r];
+        var oName2 = row[ownerColIdx] ? row[ownerColIdx].toString().trim() : "";
+        if (!oName2) continue;
+        if (!owners[oName2]) owners[oName2] = { debit: 0, credit: 0, pendingCommission: 0 };
+        var status = row[6] ? row[6].toString().toLowerCase().trim() : "";
+        if (status !== "yes") {
+          owners[oName2].pendingCommission += parseFloat(row[5]) || 0;
+        }
+      }
+    }
+
+    var ownerList = [];
+    for (var name in owners) {
+      ownerList.push({
+        name: name,
+        debit: owners[name].debit,
+        credit: owners[name].credit,
+        balance: owners[name].debit - owners[name].credit,
+        pendingCommission: owners[name].pendingCommission
+      });
+    }
+    ownerList.sort(function(a, b) { return a.name.localeCompare(b.name); });
+    return jsonResponse(ownerList);
+  }
+
+  // 9. OWNER LEDGER: ADVANCE ENTRIES FOR ONE OWNER
+  if (action === "getOwnerLedger") {
+    var ownerLedgerSheet2 = ss.getSheetByName("Owner_Ledger");
+    var searchOwner = (e.parameter.owner || "").toUpperCase().trim();
+    var oEntries = [];
+    if (ownerLedgerSheet2 && ownerLedgerSheet2.getLastRow() > 1) {
+      var olData2 = ownerLedgerSheet2.getDataRange().getValues();
+      for (var i2 = 1; i2 < olData2.length; i2++) {
+        var pName2 = olData2[i2][2] ? olData2[i2][2].toString().toUpperCase().trim() : "";
+        if (pName2 === searchOwner) {
+          oEntries.push({
+            rowNumber: i2 + 1,
+            srNo: olData2[i2][0],
+            date: olData2[i2][1],
+            owner: olData2[i2][2],
+            vNo: olData2[i2][3],
+            description: olData2[i2][4],
+            debit: parseFloat(olData2[i2][5]) || 0,
+            credit: parseFloat(olData2[i2][6]) || 0
+          });
+        }
+      }
+    }
+    oEntries.sort(function(a, b) {
+      var dA = parsePartyDate(a.date), dB = parsePartyDate(b.date);
+      if (dA && dB && dA.getTime() !== dB.getTime()) return dA - dB;
+      return a.rowNumber - b.rowNumber;
+    });
+    return jsonResponse(oEntries);
+  }
+
+  // 10. OWNER LEDGER: PENDING COMMISSION TRIPS FOR ONE OWNER
+  if (action === "getOwnerCommission") {
+    var searchOwner2 = (e.parameter.owner || "").toUpperCase().trim();
+    var dataAll2 = sheet.getDataRange().getValues();
+    var headers2 = dataAll2[0];
+    var ownerColIdx2 = findAnyHeaderIndex(headers2, ["Lorry Owner Name", "Owner Name", "Lorry Owner", "Gadi Malik", "Gadi Malik Name"]);
+    var pending = [];
+    if (ownerColIdx2 > -1) {
+      for (var k = dataAll2.length - 1; k >= 1; k--) {
+        var rowOwner = dataAll2[k][ownerColIdx2] ? dataAll2[k][ownerColIdx2].toString().toUpperCase().trim() : "";
+        if (rowOwner !== searchOwner2) continue;
+        var st = dataAll2[k][6] ? dataAll2[k][6].toString().toLowerCase().trim() : "";
+        if (st === "yes") continue; // already received, skip
+        pending.push({
+          rowNumber: k + 1,
+          date: dataAll2[k][0],
+          vNo: dataAll2[k][1],
+          from: dataAll2[k][3],
+          to: dataAll2[k][4],
+          amount: parseFloat(dataAll2[k][5]) || 0,
+          partyName: dataAll2[k][12] || ""
+        });
+      }
+    }
+    return jsonResponse(pending);
+  }
+
+  // Apps Script mein ye hissa add karein
+if (action == "getUploadedList") {
+  var docSheet = ss.getSheetByName("Vehicle_Docs");
+  var docData = docSheet.getDataRange().getValues();
+  var uploadedVehicles = [];
+  for (var i = 1; i < docData.length; i++) {
+    var vNo = docData[i][0]; // Maan lijiye Column A mein Gadi No hai
+    if (vNo && uploadedVehicles.indexOf(vNo) === -1) {
+      uploadedVehicles.push(vNo);
+    }
+  }
+  return ContentService.createTextOutput(JSON.stringify(uploadedVehicles)).setMimeType(ContentService.MimeType.JSON);
+}
+
+// code.gs ke doGet mein ise add karein agar missing hai
+if (action === "getFileContent") {
+  try {
+    var file = DriveApp.getFileById(e.parameter.fileId);
+    var base64 = Utilities.base64Encode(file.getBlob().getBytes());
+    return ContentService.createTextOutput(base64).setMimeType(ContentService.MimeType.TEXT);
+  } catch(err) {
+    return ContentService.createTextOutput("Error").setMimeType(ContentService.MimeType.TEXT);
+  }
+}
+
+  // DEFAULT: ALL DATA (View Trips)
+  var dataAll = sheet.getDataRange().getValues();
+  var headersAll = dataAll[0];
+  var jsonArray = dataAll.slice(1).reverse().map(row => {
+    var obj = {};
+    headersAll.forEach((h, i) => {
+      obj[h] = row[i];
+      if (i === 6) obj["_colG"] = row[i];
+      if (i === 7) obj["_colH"] = row[i];
+      if (i === 8) obj["_owner"] = row[i];
+    });
+    return obj;
+  });
+  return jsonResponse(jsonArray);
+}
+
+function doPost(e) {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  try {
+    var data = JSON.parse(e.postData.contents);
+
+    // CASE 1: SAVE NEW TRIP
+    if (data.action === "saveTrip") {
+      var sheet = ss.getSheetByName("Data_log");
+      sheet.appendRow([
+        data.date, data.vNo.toUpperCase(), data.dNo, data.from, data.to, 
+        data.amount, data.received, "", "", data.rate, "", 
+        data.capacity, data.partyName, data.material, data.remark
+      ]);
+      return textResponse("Success");
+    }
+
+    // CASE 2: UPLOAD VEHICLE DOCUMENT (RC/DL/Docs)
+    if (data.action === "uploadDocument") {
+      var folder = DriveApp.getFolderById(MAIN_FOLDER_ID);
+      var blob = Utilities.newBlob(Utilities.base64Decode(data.base64), data.mimeType, data.fileName);
+      var file = folder.createFile(blob);
+      var fileUrl = file.getUrl();
+
+      var docSheet = ss.getSheetByName("Vehicle_Docs") || ss.insertSheet("Vehicle_Docs");
+      if (docSheet.getLastRow() === 0) {
+        docSheet.appendRow(["Vehicle No", "Document Link", "File Name", "Upload Date"]);
+      }
+      docSheet.appendRow([data.vNo.toUpperCase(), fileUrl, data.fileName, new Date()]);
+      return textResponse("Success");
+    }
+
+    // CASE 3: SAVE LOADING SLIP (BEELTY)
+    if (data.action === "saveLoadingSlip") {
+      var sheet = ss.getSheetByName("Data_log");
+      var row = parseInt(data.rowNumber);
+      if (row > 1) { sheet.getRange(row, 16).setValue("SLIP GENERATED ✅"); }
+
+      var slipFolder = DriveApp.getFolderById(SLIP_FOLDER_ID);
+      var fileName = "Slip_" + data.vNo + "_" + data.date.replace(/\//g, '-') + ".pdf";
+      var pdfBlob = Utilities.newBlob(Utilities.base64Decode(data.pdfBase64), "application/pdf", fileName);
+      var file = slipFolder.createFile(pdfBlob);
+
+      var archiveSheet = ss.getSheetByName("Slip_Archive") || ss.insertSheet("Slip_Archive");
+      archiveSheet.appendRow([fileName, file.getId(), new Date(), file.getUrl()]);
+      return textResponse("Success");
+    }
+
+    // CASE 4: ADD PARTY LEDGER ENTRY (Hisaab-Kitaab Tally Entry)
+    if (data.action === "addLedgerEntry") {
+      var ledgerSheet = ss.getSheetByName("Party_Ledger") || ss.insertSheet("Party_Ledger");
+      if (ledgerSheet.getLastRow() === 0) {
+        ledgerSheet.appendRow(["Sr No", "Date", "Party Name", "Vehicle Number", "Description", "Debit", "Credit"]);
+      }
+      var nextSr = ledgerSheet.getLastRow(); // header row counted, so this IS the next serial number
+      ledgerSheet.appendRow([
+        nextSr,
+        data.date,
+        data.party.toUpperCase().trim(),
+        data.vNo ? data.vNo.toUpperCase().trim() : "",
+        data.description || "",
+        parseFloat(data.debit) || 0,
+        parseFloat(data.credit) || 0
+      ]);
+      return textResponse("Success");
+    }
+
+    // CASE 5: DELETE PARTY LEDGER ENTRY
+    if (data.action === "deleteLedgerEntry") {
+      var ledgerSheet = ss.getSheetByName("Party_Ledger");
+      var row = parseInt(data.rowNumber);
+      if (ledgerSheet && row > 1) { ledgerSheet.deleteRow(row); }
+      return textResponse("Success");
+    }
+
+    // CASE 6: UPDATE (EDIT) PARTY LEDGER ENTRY
+    if (data.action === "updateLedgerEntry") {
+      var ledgerSheet = ss.getSheetByName("Party_Ledger");
+      var row = parseInt(data.rowNumber);
+      if (ledgerSheet && row > 1) {
+        ledgerSheet.getRange(row, 2, 1, 6).setValues([[
+          data.date,
+          data.party.toUpperCase().trim(),
+          data.vNo ? data.vNo.toUpperCase().trim() : "",
+          data.description || "",
+          parseFloat(data.debit) || 0,
+          parseFloat(data.credit) || 0
+        ]]);
+      }
+      return textResponse("Success");
+    }
+
+    // CASE 7: ADD OWNER LEDGER ENTRY (Lorry Malik Advance Entry)
+    if (data.action === "addOwnerLedgerEntry") {
+      var ownerLedgerSheet = ss.getSheetByName("Owner_Ledger") || ss.insertSheet("Owner_Ledger");
+      if (ownerLedgerSheet.getLastRow() === 0) {
+        ownerLedgerSheet.appendRow(["Sr No", "Date", "Owner Name", "Vehicle Number", "Description", "Debit", "Credit"]);
+      }
+      var nextSrO = ownerLedgerSheet.getLastRow();
+      ownerLedgerSheet.appendRow([
+        nextSrO,
+        data.date,
+        data.owner.toUpperCase().trim(),
+        data.vNo ? data.vNo.toUpperCase().trim() : "",
+        data.description || "",
+        parseFloat(data.debit) || 0,
+        parseFloat(data.credit) || 0
+      ]);
+      return textResponse("Success");
+    }
+
+    // CASE 8: DELETE OWNER LEDGER ENTRY
+    if (data.action === "deleteOwnerLedgerEntry") {
+      var ownerLedgerSheetD = ss.getSheetByName("Owner_Ledger");
+      var rowD = parseInt(data.rowNumber);
+      if (ownerLedgerSheetD && rowD > 1) { ownerLedgerSheetD.deleteRow(rowD); }
+      return textResponse("Success");
+    }
+
+    // CASE 9: UPDATE (EDIT) OWNER LEDGER ENTRY
+    if (data.action === "updateOwnerLedgerEntry") {
+      var ownerLedgerSheetU = ss.getSheetByName("Owner_Ledger");
+      var rowU = parseInt(data.rowNumber);
+      if (ownerLedgerSheetU && rowU > 1) {
+        ownerLedgerSheetU.getRange(rowU, 2, 1, 6).setValues([[
+          data.date,
+          data.owner.toUpperCase().trim(),
+          data.vNo ? data.vNo.toUpperCase().trim() : "",
+          data.description || "",
+          parseFloat(data.debit) || 0,
+          parseFloat(data.credit) || 0
+        ]]);
+      }
+      return textResponse("Success");
+    }
+
+    // CASE 10: MARK COMMISSION RECEIVED (Data_log col G = Yes, col H = collected by)
+    if (data.action === "markCommissionReceived") {
+      var logSheet = ss.getSheetByName("Data_log");
+      var rowC = parseInt(data.rowNumber);
+      if (logSheet && rowC > 1) {
+        logSheet.getRange(rowC, 7).setValue("Yes"); // Column G
+        logSheet.getRange(rowC, 8).setValue(data.collectedBy || ""); // Column H
+      }
+      return textResponse("Success");
+    }
+
+  } catch (err) {
+    return textResponse("Error: " + err.toString());
+  }
+}
+
+// Header row mein diye gaye naam (case-insensitive) ka column index (0-based) dhoondhta hai.
+// Nahi milta to -1 return karta hai.
+function findHeaderIndex(headers, name) {
+  var target = name.toString().toLowerCase().trim();
+  for (var i = 0; i < headers.length; i++) {
+    if (headers[i] && headers[i].toString().toLowerCase().trim() === target) return i;
+  }
+  return -1;
+}
+
+// Kai possible header naamon (variants) mein se jo pehle mile wahi column index deta hai.
+// Sheet mein header ka exact naam thoda alag likha ho (e.g. "Owner Name" vs "Lorry Owner Name")
+// tab bhi ye column dhoondh leta hai.
+function findAnyHeaderIndex(headers, nameCandidates) {
+  for (var c = 0; c < nameCandidates.length; c++) {
+    var idx = findHeaderIndex(headers, nameCandidates[c]);
+    if (idx > -1) return idx;
+  }
+  return -1;
+}
+
+function jsonResponse(data) {
+  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
+}
+function textResponse(text) {
+  return ContentService.createTextOutput(text).setMimeType(ContentService.MimeType.TEXT);
+}
+// Ledger date field ko Date object mein badalta hai (input type=date se "YYYY-MM-DD" aata hai)
+function parsePartyDate(val) {
+  if (!val) return null;
+  var d = new Date(val);
+  return isNaN(d.getTime()) ? null : d;
+}
