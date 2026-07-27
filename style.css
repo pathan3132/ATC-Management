@@ -825,34 +825,25 @@ label { font-size: 13px; font-weight: bold; color: #555; margin-bottom: 2px; }
 /* Service Cards */
 .service-card {
     background: white;
-    padding: 12px 6px;
+    padding: 15px;
     border-radius: 18px;
     text-align: center;
     box-shadow: 0 4px 12px rgba(0,0,0,0.03);
     transition: 0.3s;
     border: 1px solid #f0f0f0;
-    cursor: pointer;
-}
-
-.service-card span {
-    display: block;
-    font-size: 11.5px;
-    font-weight: 600;
-    color: #333;
-    line-height: 1.2;
 }
 
 .service-card:active { transform: scale(0.95); }
 
 .icon-circle {
-    width: 42px;
-    height: 42px;
+    width: 45px;
+    height: 45px;
     border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto 8px;
-    font-size: 18px;
+    margin: 0 auto 10px;
+    font-size: 20px;
 }
 
 /* Floating Action Button (FAB) */
@@ -884,11 +875,7 @@ label { font-size: 13px; font-weight: bold; color: #555; margin-bottom: 2px; }
     align-items: center;
     justify-content: space-between;
     border-left: 5px solid #003366;
-    transition: 0.2s;
 }
-.recent-item:active { transform: scale(0.98); }
-.recent-item.status-received { border-left-color: #28a745; }
-.recent-item.status-pending { border-left-color: #dc3545; }
 
 /* BEELTY PRINT STYLES */
 .beelty-container-wrapper {
@@ -1763,4 +1750,74 @@ body { background-color: #f4f7f9; font-family: 'Segoe UI', Roboto, sans-serif; }
     .form-control-sm, .c-input-line, .c-input-bold {
         font-size: 16px !important;
     }
+}
+
+/* Drag & Drop Upload Zone (RC Fleet - Vehicle Documents) */
+.upload-drop-zone {
+    border: 2px dashed #adb5bd;
+    border-radius: 10px;
+    padding: 14px;
+    background: #f8f9fa;
+    transition: all 0.2s ease;
+}
+.upload-drop-zone.drag-over {
+    border-color: #003366;
+    background: #e7f0ff;
+    color: #003366;
+}
+
+/* Beelty Header Address (ab top par) */
+.c-address-text-top {
+    font-size: 13px;
+    font-weight: 700;
+    color: #333;
+    margin-top: 4px;
+    text-align: center;
+}
+
+/* ===== Beelty Mobile Wizard ===== */
+.wizard-nav-bar {
+    display: none;
+    position: sticky;
+    bottom: 0;
+    z-index: 50;
+    background: #fff;
+    border-top: 1px solid #ddd;
+    padding: 8px 12px;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.08);
+}
+.wizard-step-label {
+    text-align: center;
+    font-size: 12px;
+    font-weight: bold;
+    color: #003366;
+    margin-bottom: 6px;
+}
+.wizard-nav-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+/* Jab wizard-mode active ho, sirf current step dikhao */
+#receipt-to-print.wizard-mode [data-wizard-step] {
+    display: none;
+}
+#receipt-to-print.wizard-mode [data-wizard-step].wizard-active {
+    display: block;
+    animation: wizardFadeIn 0.25s ease;
+}
+/* c-grid ek CSS grid hai, ismein direct child c-box hide/show hote hain to grid tootne na de */
+#receipt-to-print.wizard-mode .c-grid {
+    display: block;
+}
+
+@keyframes wizardFadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Wizard mode ke waqt header/watermark hata ke sirf form pe focus rahe, taaki mobile pe chota na lage */
+#receipt-to-print.wizard-mode .c-header,
+#receipt-to-print.wizard-mode .watermark-container {
+    display: none;
 }
