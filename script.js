@@ -274,26 +274,51 @@ function parseSheetDate(dateStr) {
 }
 
 
-// WhatsApp Share
+// ✅ WhatsApp Share - FIXED VERSION (Proper Phone Number Validation)
 async function shareTrip(phone, vNo, from, to, party, amt, date, material, weight) {
-    // 1. Phone number cleaning
-    let cleanPhone = String(phone || "").replace(/\D/g, '');
-    let last10Digits = cleanPhone.slice(-10);
+    // 1️⃣ Phone number को properly format करो
+    let rawPhone = String(phone || "").trim();
+    
+    // Step-by-step cleaning करो
+    let cleanPhone = rawPhone
+        .replace(/^[\+]/g, '')              // + को हटाओ
+        .replace(/^00/, '')                 // 00 को हटाओ (0091 case)
+        .replace(/^0(?=\d{10})/, '')        // Leading 0 को हटाओ (10 digits के case में)
+        .replace(/[\s\-\(\)]/g, '')         // Spaces, dashes, brackets हटाओ
+        .replace(/\D/g, '');                // बाकी सब non-digits हटाओ
+    
+    // Country code add करो (अगर नहीं है)
+    if (cleanPhone.length === 10) {
+        cleanPhone = '91' + cleanPhone;     // India के लिए
+    } else if (cleanPhone.length > 13 || cleanPhone.length < 10) {
+        alert(`❌ Invalid phone number: "${rawPhone}"\n\nPlease use format like:\n• 9876543210\n• +919876543210\n• 91-9876543210`);\n        return;\n    }
+    
+    let last10Digits = cleanPhone.slice(-10);  // matching के लिए last 10 digits लो
 
-    // 2. History Calculation with Destinations (From/To)
-    let historyList = "";
-    let oldPendingAmt = 0;
+    // 2️⃣ History Calculation with Destinations (From/To)
+    let historyList = "";\n    let oldPendingAmt = 0;
     let pendingTripsCount = 0;
 
     if (allTripsData && allTripsData.length > 0) {
         allTripsData.forEach(t => {
-            let tPhoneD = String(t['Driver No'] || "").replace(/\D/g, '').slice(-10);
-            let tPhoneO = String(t['_owner'] || "").replace(/\D/g, '').slice(-10);
+            // Driver और Owner दोनों के numbers को properly clean करो
+            let tPhoneD = String(t['Driver No'] || "")
+                .replace(/[\s\-\(\)]/g, '')
+                .replace(/^0(?=\d{10})/, '')
+                .replace(/\D/g, '')
+                .slice(-10);
+            
+            let tPhoneO = String(t['_owner'] || "")
+                .replace(/[\s\-\(\)]/g, '')
+                .replace(/^0(?=\d{10})/, '')
+                .replace(/\D/g, '')
+                .slice(-10);
+            
             let isCollected = (String(t['_colG'] || "").toLowerCase().trim() === "yes");
 
             // Agar number match kare aur payment pending ho
             if ((tPhoneD === last10Digits || tPhoneO === last10Digits) && !isCollected) {
-                // Check karein ki ye current trip toh nahi hai
+                // Check करो कि ye current trip तो नहीं है
                 if (!(t['Vehicle No'] === vNo && t['Date'] === date)) {
                     let v = String(t['Vehicle No']).replace(/&/g, "and");
                     let f = String(t['From'] || "N/A").replace(/&/g, "and");
@@ -303,7 +328,7 @@ async function shareTrip(phone, vNo, from, to, party, amt, date, material, weigh
 
                     // Designing each old trip entry
                     historyList += `▪️ *${v}* (${dt})\n`;
-                    historyList += `   📍 ${f} ➔ ${rt}\n`; // Destinations added here
+                    historyList += `   📍 ${f} ➔ ${rt}\n`;
                     historyList += `   💰 Fare: ₹${a}\n\n`;
 
                     oldPendingAmt += a;
@@ -316,7 +341,7 @@ async function shareTrip(phone, vNo, from, to, party, amt, date, material, weigh
     let currentAmt = parseFloat(amt || 0);
     let totalOutstanding = currentAmt + oldPendingAmt;
 
-    // 3. Message Body Design
+    // 3️⃣ Message Body Design
     let messageBody = `🏢 *ATC ALLINDIA TRANSPORT*
 _Munna Bhai & Asif Bhai_
 ==========================
@@ -343,11 +368,13 @@ Commission bhej kar SS dein:
 
 _Thank you for choosing ATC!_`;
 
-    // 4. Proper Encoding (Taki message na kate)
+    // 4️⃣ Proper Encoding (Taki message na kate)
     let encodedMsg = encodeURIComponent(messageBody);
+    
+    // 5️⃣ WhatsApp URL - अब cleanPhone पूरी तरह से सही format में है (91 के साथ)
     let whatsappURL = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedMsg}`;
 
-    // 5. Open WhatsApp
+    // 6️⃣ Open WhatsApp
     try {
         window.location.href = whatsappURL;
     } catch (e) {
