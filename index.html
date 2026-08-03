@@ -38,6 +38,7 @@
                 <a href="#" class="list-group-item p-3" onclick="showSection('view-trips')"><i class="bi bi-truck me-2 text-warning"></i> View All Trips</a>
                 <a href="#" class="list-group-item p-3" onclick="showSection('accounts')"><i class="bi bi-wallet2 me-2 text-success"></i> Hisaab-Kitaab</a>
                 <a href="#" class="list-group-item p-3" onclick="showSection('party-ledger')"><i class="bi bi-journal-bookmark-fill me-2 text-primary"></i> Party Ledger (Khata)</a>
+                <a href="#" class="list-group-item p-3" onclick="showSection('advance-ledger')"><i class="bi bi-arrow-left-right me-2 text-danger"></i> Advance Payment (SMT)</a>
                <a href="#" class="list-group-item p-3" onclick="showSection('loading-slip')">
     <i class="bi bi-file-earmark-pdf me-2 text-danger"></i> Generate Loading Slip (Beelty)
 </a>
@@ -182,6 +183,14 @@
                     <span>Party Khata</span>
                 </div>
             </div>
+            <div class="col-6">
+                <div class="service-card" onclick="showSection('advance-ledger')">
+                    <div class="icon-circle bg-danger-subtle text-danger">
+                        <i class="bi bi-arrow-left-right"></i>
+                    </div>
+                    <span>Advance (SMT)</span>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -311,7 +320,7 @@
 
                 <div class="d-flex gap-2 mb-3">
                     <button class="btn btn-sm btn-outline-success flex-fill" onclick="shareLedgerStatement()"><i class="bi bi-whatsapp"></i> Statement Bhejein</button>
-                    <button class="btn btn-sm btn-outline-secondary flex-fill" onclick="exportLedgerCSV()"><i class="bi bi-download"></i> Export CSV</button>
+                    <button class="btn btn-sm btn-outline-secondary flex-fill" onclick="exportLedgerCSV()"><i class="bi bi-download"></i> Export PDF</button>
                 </div>
 
                 <!-- Add / Edit Entry Form -->
@@ -366,6 +375,174 @@
                             </tr>
                         </thead>
                         <tbody id="ledgerTableBody">
+                            <!-- Rows injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ADVANCE PAYMENT (SMT / PARTY ADVANCE) SECTION -->
+        <!-- Jab koi party (jaise SMT/Tomato) gadi ke liye advance hamare account mein daalti hai, -->
+        <!-- aur fir hum wahi advance driver/gadi malik ko pay karte hain — us pura hisaab (in/out) yahan track hota hai -->
+        <div id="advance-ledger-section" class="app-section hidden">
+            <h4 class="fw-bold mb-3"><i class="bi bi-arrow-left-right me-2 text-danger"></i>Advance Payment (SMT / Party Advance)</h4>
+
+            <!-- Overall Summary Across All Parties -->
+            <div class="row g-2 mb-3">
+                <div class="col-4">
+                    <div class="card shadow-sm border-0 bg-success text-white p-2 text-center">
+                        <small class="opacity-75">Total Received</small>
+                        <h6 id="advAllReceived" class="mb-0 fw-bold">₹0</h6>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="card shadow-sm border-0 bg-danger text-white p-2 text-center">
+                        <small class="opacity-75">Total Paid Out</small>
+                        <h6 id="advAllPaid" class="mb-0 fw-bold">₹0</h6>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="card shadow-sm border-0 p-2 text-center" style="background:#003366; color:white;">
+                        <small class="opacity-75">Pending</small>
+                        <h6 id="advAllPending" class="mb-0 fw-bold">₹0</h6>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Party Picker (Paid From — jaise SMT) -->
+            <div id="advPartyPickerCard" class="filter-card bg-white p-3 rounded-4 shadow-sm mb-3">
+                <label class="small fw-bold d-block mb-2">Select / Add Party (Paid From)</label>
+                <div class="input-group">
+                    <input type="text" id="advPartyInput" class="form-control" list="advPartyListOptions" placeholder="e.g. SMT" onkeyup="if(event.key==='Enter') openAdvanceLedger();">
+                    <datalist id="advPartyListOptions"></datalist>
+                    <button class="btn btn-danger fw-bold" onclick="openAdvanceLedger()"><i class="bi bi-search"></i> Open</button>
+                </div>
+                <input type="text" id="advPartyChipSearch" class="form-control form-control-sm mt-2" placeholder="🔍 Party list mein search karein..." onkeyup="filterAdvancePartyChips()">
+                <div id="advPartyChipsRow" class="d-flex flex-wrap gap-2 mt-3"><!-- Quick party chips --></div>
+            </div>
+
+            <!-- Ledger View (hidden until a party is opened) -->
+            <div id="advLedgerViewArea" class="hidden">
+                <div class="card shadow-sm border-0 mb-3 text-white p-3 d-flex flex-row justify-content-between align-items-center" style="background: linear-gradient(45deg, #660000, #b30000);">
+                    <div>
+                        <small class="opacity-75">Paid From (Party)</small>
+                        <h4 id="advPartyName" class="fw-bold mb-0">-</h4>
+                    </div>
+                    <button class="btn btn-sm btn-light fw-bold" onclick="closeAdvanceLedger()"><i class="bi bi-arrow-left"></i> Badlein</button>
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-4">
+                        <div class="card shadow-sm border-0 bg-success text-white p-2 text-center">
+                            <small class="opacity-75">Received</small>
+                            <h5 id="advTotalReceived" class="mb-0 fw-bold">₹0</h5>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="card shadow-sm border-0 bg-danger text-white p-2 text-center">
+                            <small class="opacity-75">Paid Out</small>
+                            <h5 id="advTotalPaid" class="mb-0 fw-bold">₹0</h5>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="card shadow-sm border-0 p-2 text-center" style="background:#003366; color:white;">
+                            <small class="opacity-75">Pending</small>
+                            <h5 id="advPendingBal" class="mb-0 fw-bold">₹0</h5>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2 mb-3">
+                    <button class="btn btn-sm btn-outline-success flex-fill" onclick="shareAdvanceStatement()"><i class="bi bi-whatsapp"></i> Statement Bhejein</button>
+                    <button class="btn btn-sm btn-outline-secondary flex-fill" onclick="exportAdvanceCSV()"><i class="bi bi-download"></i> Export PDF</button>
+                </div>
+
+                <!-- Add / Edit Entry Form -->
+                <div class="card shadow-sm border-0 p-3 mb-3 rounded-4">
+                    <h6 id="advFormTitle" class="fw-bold mb-3"><i class="bi bi-plus-circle text-danger me-1"></i>New Entry</h6>
+                    <input type="hidden" id="advEditRow" value="">
+                    <div class="row g-2">
+                        <div class="col-12 col-sm-6">
+                            <label class="small text-muted">Vehicle No</label>
+                            <input type="text" id="advVNo" class="form-control form-control-sm" list="advVehicleListOptions" placeholder="Type RJ..." oninput="onAdvVNoInput()">
+                            <datalist id="advVehicleListOptions"></datalist>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="small text-muted">Date</label>
+                            <input type="date" id="advDate" class="form-control form-control-sm">
+                        </div>
+                        <!-- Vehicle select hone par uski purani trips yahan dikhengi -->
+                        <div id="advTripSelectArea" class="col-12 hidden">
+                            <label class="small text-muted">Is Gadi Ki Trip Select Karein (Auto-Fill)</label>
+                            <select id="advTripSelectDropdown" class="form-control form-control-sm" onchange="fillAdvFromTrip()">
+                                <option value="">-- Trip Select Karein --</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="small text-muted">Contact Number</label>
+                            <input type="text" id="advDrNo" class="form-control form-control-sm" placeholder="Driver/Owner Mobile">
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="small text-muted">From</label>
+                            <input type="text" id="advFrom" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="small text-muted">To</label>
+                            <input type="text" id="advTo" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-12">
+                            <hr class="my-1">
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="small text-muted">A/C Name (Kis account mein aaya)</label>
+                            <input type="text" id="advAcName" class="form-control form-control-sm" list="advAccountListOptions" placeholder="Select purana ya naya type karein">
+                            <datalist id="advAccountListOptions"></datalist>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="small text-muted text-success">Received Advance ₹ (Party se aaya)</label>
+                            <input type="number" id="advReceived" class="form-control form-control-sm">
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="small text-muted">Paid To (Driver / Gadi Malik)</label>
+                            <input type="text" id="advPaidTo" class="form-control form-control-sm" placeholder="e.g. Imran">
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="small text-muted text-danger">Paid Advance ₹ (Humne pay kiya)</label>
+                            <input type="number" id="advPaid" class="form-control form-control-sm">
+                            <small class="text-muted">Agar Received khaali chhodkar seedha yahan amount daalein, iska matlab party ne khud driver ko pay kar diya — ye humare calc mein nahi jodenge.</small>
+                        </div>
+                        <div class="col-12">
+                            <label class="small text-muted">Remark (Optional)</label>
+                            <input type="text" id="advRemark" class="form-control form-control-sm">
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2 mt-3">
+                        <button id="advAddBtn" class="btn btn-danger flex-fill fw-bold" onclick="addAdvanceEntry()">
+                            <i class="bi bi-check-circle me-1"></i> Add Entry
+                        </button>
+                        <button id="advCancelEditBtn" class="btn btn-outline-secondary hidden" onclick="cancelAdvanceEdit()">Cancel</button>
+                    </div>
+                </div>
+
+                <!-- Search within ledger -->
+                <input type="text" id="advSearch" class="form-control form-control-sm mb-2 shadow-sm" placeholder="🔍 Vehicle / Paid To mein search karein..." onkeyup="filterAdvanceRows()">
+
+                <!-- Advance Ledger Table -->
+                <div class="table-responsive shadow-sm rounded-4" style="background:white;">
+                    <table class="table table-sm ledger-table mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Date</th>
+                                <th>Vehicle / Route</th>
+                                <th class="text-end text-success">Received</th>
+                                <th>Paid To</th>
+                                <th class="text-end text-danger">Paid</th>
+                                <th class="text-end">Pending</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="advTableBody">
                             <!-- Rows injected here -->
                         </tbody>
                     </table>
@@ -748,6 +925,28 @@
         </button>
     </div>
 
+
+    <!-- "WHAT'S NEW" UPDATE NOTIFICATION MODAL -->
+    <!-- Jab bhi app update hokar deploy hoti hai (naya APP_VERSION script.js mein), -->
+    <!-- ye popup sabhi users ko ek baar dikhega aur bata dega ki kya naya add/fix hua hai -->
+    <div class="modal fade" id="whatsNewModal" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 border-0 shadow-lg">
+                <div class="modal-header border-0 text-white" style="background: linear-gradient(45deg, #003366, #0056b3);">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-stars me-2"></i>App Update Hui Hai!</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div id="whatsNewBody"><!-- Changelog yahan JS se bharega --></div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-primary fw-bold w-100" data-bs-dismiss="modal">
+                        <i class="bi bi-check-circle me-1"></i> Theek Hai, Samajh Gaya
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="script.js"></script>

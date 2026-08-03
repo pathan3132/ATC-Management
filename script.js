@@ -1,4 +1,47 @@
 let allTripsData = []; // Saara data store karne ke liye
+
+// Jab bhi statement PDF banayein, ye ek simple full-screen "Generating PDF..." overlay dikhata hai
+// taaki neeche wala real (non-hacky) content element user ko flash na ho. Yehi wajah thi ki
+// off-screen (position:fixed/-9999px) trick se PDF blank aa raha tha — html2canvas ko element
+// normal document-flow mein chahiye, jaisa purana Loading Slip (#receipt-to-print) system karta hai.
+function showPdfGeneratingOverlay() {
+    const overlay = document.createElement('div');
+    overlay.id = 'pdfGenOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:#ffffff;z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;font-family:Arial,sans-serif;color:#003366;';
+    overlay.innerHTML = '<div class="spinner-border text-danger mb-2"></div><div>PDF Generate ho raha hai...</div>';
+    document.body.appendChild(overlay);
+    return overlay;
+}
+function hidePdfGeneratingOverlay(overlay) {
+    if (overlay && overlay.parentNode) document.body.removeChild(overlay);
+}
+
+// PDF ko pehle device mein SAVE/DOWNLOAD karta hai, aur uske baad WhatsApp/share menu bhi khol deta hai —
+// taaki statement hamesha phone mein bhi rahe aur turant kisi ko bhej bhi saken.
+async function sharePdfOrDownload(blob, filename) {
+    // 1. Pehle PDF download karo (device mein save)
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    // 2. Fir WhatsApp (ya jo bhi share sheet available ho) khol do
+    try {
+        const file = new File([blob], filename, { type: 'application/pdf' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: filename });
+            return;
+        }
+    } catch (e) {
+        if (e && e.name === 'AbortError') return; // User ne share cancel kar diya, download to ho hi chuka hai
+    }
+    alert("PDF download ho gayi hai. Is device par direct share menu available nahi tha — WhatsApp kholkar ye PDF file manually attach kar dein.");
+}
+
 // --- LOCAL DATABASE SETUP (IndexedDB) ---
 let db;
 const request = indexedDB.open("ATC_Slips_DB", 1);
@@ -123,6 +166,13 @@ function showSection(id) {
         loadPartyChips(); 
         document.getElementById('ledgerViewArea').classList.add('hidden'); 
         document.getElementById('partyPickerCard').classList.remove('hidden');
+    }
+    if(id === 'advance-ledger') {
+        loadAdvancePartyChips();
+        loadAdvVehicleList();
+        loadAdvAccountList();
+        document.getElementById('advLedgerViewArea').classList.add('hidden');
+        document.getElementById('advPartyPickerCard').classList.remove('hidden');
     }
     
     // --- YE DO LINES ZAROORI HAIN ---
@@ -1000,48 +1050,622 @@ async function deleteLedgerEntry(rowNumber) {
     }
 }
 
-// Party ka poora statement WhatsApp par bhejna (text summary)
-function shareLedgerStatement() {
-    if (!currentLedgerParty || currentLedgerEntries.length === 0) { alert("Is party ki koi entry nahi hai."); return; }
-
-    let totalDebit = 0, totalCredit = 0;
-    let lines = "";
-    currentLedgerEntries.forEach(row => {
+// Party ki poori ledger ka ek printable PDF (HTML) banata hai — export aur share dono isi ko reuse karte hain
+function buildLedgerPdfElement() {
+    let totalDebit = 0, totalCredit = 0, runningBalance = 0, rowsHtml = "";
+    currentLedgerEntries.forEach((row, idx) => {
         totalDebit += row.debit;
         totalCredit += row.credit;
-        let desc = row.vNo ? `${row.vNo} - ${row.description || ''}` : (row.description || 'Entry');
-        if (row.debit) lines += `${row.date} | ${desc} | Dr ₹${row.debit.toLocaleString('en-IN')}\n`;
-        if (row.credit) lines += `${row.date} | ${desc} | Cr ₹${row.credit.toLocaleString('en-IN')}\n`;
+        runningBalance += (row.debit - row.credit);
+        const balColor = runningBalance > 0 ? '#c0392b' : (runningBalance < 0 ? '#1a7a3c' : '#666');
+        rowsHtml += `
+            <tr>
+                <td style="padding:6px;border:1px solid #ddd;">${idx + 1}</td>
+                <td style="padding:6px;border:1px solid #ddd;">${row.date}</td>
+                <td style="padding:6px;border:1px solid #ddd;">${row.vNo ? `<b>${row.vNo}</b><br>` : ''}<span style="font-size:10px;color:#666;">${row.description || ''}</span></td>
+                <td style="padding:6px;border:1px solid #ddd;text-align:right;color:#c0392b;">${row.debit ? '₹' + row.debit.toLocaleString('en-IN') : '-'}</td>
+                <td style="padding:6px;border:1px solid #ddd;text-align:right;color:#1a7a3c;">${row.credit ? '₹' + row.credit.toLocaleString('en-IN') : '-'}</td>
+                <td style="padding:6px;border:1px solid #ddd;text-align:right;font-weight:bold;color:${balColor};">₹${Math.abs(runningBalance).toLocaleString('en-IN')}</td>
+            </tr>`;
     });
 
-    const balance = totalDebit - totalCredit;
-    const balanceText = balance > 0 ? `₹${balance.toLocaleString('en-IN')} (LENA HAI)` : balance < 0 ? `₹${Math.abs(balance).toLocaleString('en-IN')} (DENA HAI)` : "₹0 (CLEAR)";
+    const balanceText = runningBalance > 0 ? `₹${runningBalance.toLocaleString('en-IN')} (LENA HAI)` : runningBalance < 0 ? `₹${Math.abs(runningBalance).toLocaleString('en-IN')} (DENA HAI)` : '₹0 (CLEAR)';
 
-    const message = `🏢 *ATC ALLINDIA TRANSPORT*\nParty Statement: *${currentLedgerParty}*\n==========================\n${lines}--------------------------\nTotal Debit: ₹${totalDebit.toLocaleString('en-IN')}\nTotal Credit: ₹${totalCredit.toLocaleString('en-IN')}\n🛑 *BALANCE: ${balanceText}*\n\n_ATC AllIndia Transport_`;
+    const html = `
+        <div style="font-family: Arial, sans-serif; width:750px; padding:20px; color:#222;">
+            <div style="text-align:center; border-bottom:2px solid #003366; padding-bottom:10px; margin-bottom:15px;">
+                <h2 style="margin:0;color:#003366;">🏢 ATC ALLINDIA TRANSPORT</h2>
+                <div style="font-size:13px;color:#555;">Party Statement</div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:12px;font-size:13px;">
+                <div><b>Party:</b> ${currentLedgerParty}</div>
+                <div><b>Date:</b> ${new Date().toLocaleDateString('en-IN')}</div>
+            </div>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                <thead>
+                    <tr style="background:#003366;color:white;">
+                        <th style="padding:6px;border:1px solid #ddd;">#</th>
+                        <th style="padding:6px;border:1px solid #ddd;">Date</th>
+                        <th style="padding:6px;border:1px solid #ddd;">Vehicle / Description</th>
+                        <th style="padding:6px;border:1px solid #ddd;">Debit</th>
+                        <th style="padding:6px;border:1px solid #ddd;">Credit</th>
+                        <th style="padding:6px;border:1px solid #ddd;">Balance</th>
+                    </tr>
+                </thead>
+                <tbody>${rowsHtml}</tbody>
+            </table>
+            <div style="margin-top:15px;border-top:1px solid #ccc;padding-top:10px;font-size:13px;">
+                <div><b>Total Debit:</b> ₹${totalDebit.toLocaleString('en-IN')}</div>
+                <div><b>Total Credit:</b> ₹${totalCredit.toLocaleString('en-IN')}</div>
+                <div style="font-weight:bold;color:#b30000;margin-top:5px;">BALANCE: ${balanceText}</div>
+            </div>
+        </div>`;
 
-    const encodedMsg = encodeURIComponent(message);
-    window.open(`https://api.whatsapp.com/send?text=${encodedMsg}`, '_blank');
+    const container = document.createElement('div');
+    container.style.background = '#ffffff';
+    container.style.width = '750px';
+    container.innerHTML = html;
+    document.body.appendChild(container);
+
+    const opt = {
+        margin: 5,
+        filename: `Ledger_${currentLedgerParty}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+    return { container, opt };
 }
 
-// Party ki ledger CSV file mein export karna (Excel mein khul jaati hai)
-function exportLedgerCSV() {
+// Party ka poora statement ab PDF banakar WhatsApp (ya jo bhi share sheet available ho) se bhejna
+async function shareLedgerStatement() {
+    if (!currentLedgerParty || currentLedgerEntries.length === 0) { alert("Is party ki koi entry nahi hai."); return; }
+    const overlay = showPdfGeneratingOverlay();
+    const { container, opt } = buildLedgerPdfElement();
+    try {
+        const worker = html2pdf().set(opt).from(container);
+        const blob = await worker.outputPdf('blob');
+        document.body.removeChild(container);
+        hidePdfGeneratingOverlay(overlay);
+        await sharePdfOrDownload(blob, opt.filename);
+    } catch (e) {
+        if (container.parentNode) document.body.removeChild(container);
+        hidePdfGeneratingOverlay(overlay);
+        alert("PDF banane mein dikkat aayi.");
+    }
+}
+
+// Party ki ledger ab PDF file mein export/download hogi (pehle CSV thi)
+async function exportLedgerCSV() {
     if (!currentLedgerParty || currentLedgerEntries.length === 0) { alert("Export karne ke liye koi entry nahi hai."); return; }
-
-    let csv = "Sr No,Date,Vehicle No,Description,Debit,Credit\n";
-    currentLedgerEntries.forEach((row, idx) => {
-        const desc = String(row.description || '').replace(/"/g, '""');
-        csv += `${idx + 1},"${row.date}","${row.vNo || ''}","${desc}",${row.debit},${row.credit}\n`;
-    });
-
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `Ledger_${currentLedgerParty}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const overlay = showPdfGeneratingOverlay();
+    const { container, opt } = buildLedgerPdfElement();
+    try {
+        await html2pdf().set(opt).from(container).save();
+    } finally {
+        if (container.parentNode) document.body.removeChild(container);
+        hidePdfGeneratingOverlay(overlay);
+    }
 }
 // ================= END PARTY LEDGER =================
+
+
+// ================= ADVANCE PAYMENT LEDGER (SMT / PARTY ADVANCE) =================
+// Jab party (jaise SMT/Tomato) kisi gadi ke liye advance hamare account mein daalti hai,
+// aur fir hum wahi paisa driver/gadi malik ko pay karte hain — us poora hisaab yahan track hota hai.
+let currentAdvanceParty = null;
+let allAdvancePartiesData = [];   // Advance party list cache (search/filter ke liye)
+let currentAdvanceEntries = [];   // Khuli hui party ki entries cache (CSV/Share/Search ke liye)
+let allAdvVehicles = [];          // Sabhi gadi numbers cache (typeahead ke liye)
+let currentAdvTrips = [];         // Select ki gayi gadi ki purani trips (auto-fill ke liye)
+
+// Vehicle datalist load karna (RJ type karte hi suggestions ke liye)
+async function loadAdvVehicleList() {
+    try {
+        const res = await fetch(scriptURL + "?action=getVehicles");
+        allAdvVehicles = await res.json();
+        document.getElementById('advVehicleListOptions').innerHTML = allAdvVehicles.map(v => `<option value="${v}">`).join('');
+    } catch (e) { console.error("Adv vehicle list error:", e); }
+}
+
+// Jab Vehicle No field mein type/select ho — agar exact match mile to uski trips fetch karo
+async function onAdvVNoInput() {
+    const val = document.getElementById('advVNo').value.trim().toUpperCase();
+    const area = document.getElementById('advTripSelectArea');
+    if (!allAdvVehicles.includes(val)) { area.classList.add('hidden'); return; }
+
+    try {
+        const res = await fetch(scriptURL + "?action=getAdvTripsByVehicle&vNo=" + encodeURIComponent(val));
+        currentAdvTrips = await res.json();
+        const dropdown = document.getElementById('advTripSelectDropdown');
+        if (currentAdvTrips && currentAdvTrips.length > 0) {
+            dropdown.innerHTML = '<option value="">-- Trip Select Karein --</option>' +
+                currentAdvTrips.map((t, i) => `<option value="${i}">${t.date} | ${t.from} → ${t.to}</option>`).join('');
+            area.classList.remove('hidden');
+        } else {
+            area.classList.add('hidden');
+        }
+    } catch (e) { area.classList.add('hidden'); }
+}
+
+// Select ki gayi trip se Date/Contact/From/To auto-fill karna (aage se edit bhi kar sakte hain)
+function fillAdvFromTrip() {
+    const idx = document.getElementById('advTripSelectDropdown').value;
+    const trip = currentAdvTrips[idx];
+    if (!trip) return;
+    if (trip.date) {
+        const d = parseSheetDate(trip.date);
+        if (d) document.getElementById('advDate').value = d.toISOString().split('T')[0];
+    }
+    document.getElementById('advFrom').value = trip.from || '';
+    document.getElementById('advTo').value = trip.to || '';
+    document.getElementById('advDrNo').value = trip.dNo || '';
+}
+
+// A/C Name datalist load karna (pehle use kiye gaye accounts suggest honge, naya bhi type kar sakte hain)
+async function loadAdvAccountList() {
+    try {
+        const res = await fetch(scriptURL + "?action=getAdvanceAccountList");
+        const accounts = await res.json();
+        document.getElementById('advAccountListOptions').innerHTML = accounts.map(a => `<option value="${a}">`).join('');
+    } catch (e) { console.error("Adv account list error:", e); }
+}
+
+async function loadAdvancePartyChips() {
+    const chipsRow = document.getElementById('advPartyChipsRow');
+    const dataList = document.getElementById('advPartyListOptions');
+    chipsRow.innerHTML = '<small class="text-muted">Loading parties...</small>';
+
+    try {
+        const res = await fetch(scriptURL + "?action=getAdvancePartyList");
+        const parties = await res.json();
+        allAdvancePartiesData = parties;
+
+        dataList.innerHTML = parties.map(p => `<option value="${p.name}">`).join('');
+
+        let totalReceived = 0, totalPaid = 0;
+        parties.forEach(p => { totalReceived += p.received; totalPaid += p.paid; });
+        document.getElementById('advAllReceived').innerText = "₹" + totalReceived.toLocaleString('en-IN');
+        document.getElementById('advAllPaid').innerText = "₹" + totalPaid.toLocaleString('en-IN');
+        document.getElementById('advAllPending').innerText = "₹" + (totalReceived - totalPaid).toLocaleString('en-IN');
+
+        renderAdvancePartyChips(parties);
+    } catch (e) {
+        chipsRow.innerHTML = '<small class="text-danger">Party list load nahi ho saki.</small>';
+    }
+}
+
+function renderAdvancePartyChips(parties) {
+    const chipsRow = document.getElementById('advPartyChipsRow');
+    if (parties.length === 0) {
+        chipsRow.innerHTML = '<small class="text-muted">Abhi tak koi party nahi hai. Naam likh kar shuru karein (jaise SMT).</small>';
+        return;
+    }
+    chipsRow.innerHTML = parties.map(p => {
+        const pending = p.pending;
+        const balClass = pending > 0 ? 'text-warning' : (pending < 0 ? 'text-danger' : 'text-muted');
+        return `<span class="party-chip" onclick="document.getElementById('advPartyInput').value='${safeAttr(p.name)}'; openAdvanceLedger();">
+                    ${safeAttr(p.name)} <b class="${balClass}">₹${Math.abs(pending).toLocaleString('en-IN')}</b>
+                </span>`;
+    }).join('');
+}
+
+// Party chips ko search box se filter karna
+function filterAdvancePartyChips() {
+    const val = document.getElementById('advPartyChipSearch').value.toUpperCase();
+    const filtered = allAdvancePartiesData.filter(p => p.name.toUpperCase().includes(val));
+    renderAdvancePartyChips(filtered);
+}
+
+// Ek party (jaise SMT) ka advance ledger khol kar dikhana
+async function openAdvanceLedger() {
+    const nameInput = document.getElementById('advPartyInput');
+    const party = nameInput.value.trim().toUpperCase();
+    if (!party) { alert("Pehle party ka naam likhein (jaise SMT)!"); return; }
+
+    currentAdvanceParty = party;
+    document.getElementById('advPartyPickerCard').classList.add('hidden');
+    document.getElementById('advLedgerViewArea').classList.remove('hidden');
+    document.getElementById('advPartyName').innerText = party;
+    document.getElementById('advDate').value = new Date().toISOString().split('T')[0];
+    cancelAdvanceEdit();
+
+    await refreshAdvanceTable();
+}
+
+// Party badalne ke liye wapas list par jaana
+function closeAdvanceLedger() {
+    currentAdvanceParty = null;
+    currentAdvanceEntries = [];
+    document.getElementById('advLedgerViewArea').classList.add('hidden');
+    document.getElementById('advPartyPickerCard').classList.remove('hidden');
+    document.getElementById('advPartyInput').value = '';
+    loadAdvancePartyChips(); // Balances refresh karein
+}
+
+// Table + summary refresh karna
+async function refreshAdvanceTable() {
+    if (!currentAdvanceParty) return;
+    const tbody = document.getElementById('advTableBody');
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center p-3"><div class="spinner-border spinner-border-sm text-danger"></div></td></tr>';
+
+    try {
+        const res = await fetch(scriptURL + `?action=getAdvanceLedger&party=${encodeURIComponent(currentAdvanceParty)}`);
+        const entries = await res.json();
+        currentAdvanceEntries = entries;
+        renderAdvanceRows(entries);
+    } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center p-3 text-danger">Ledger load nahi ho saka.</td></tr>';
+    }
+}
+
+// Rows ko table mein draw karna (HAR ENTRY KA APNA ALAG BALANCE — cumulative running total nahi)
+function renderAdvanceRows(entries) {
+    const tbody = document.getElementById('advTableBody');
+    let totalReceived = 0, totalPaid = 0, overallPending = 0, rowsHtml = "";
+
+    entries.forEach((row, idx) => {
+        // Agar Received 0 hai aur Paid > 0, matlab party ne SEEDHA driver ko pay kiya — hamare account se nahi gaya.
+        // Isliye ye amount hamare Paid/Pending calculation mein nahi jodenge, sirf record ke liye dikhayenge.
+        const isDirect = (row.received === 0 && row.paid > 0);
+
+        totalReceived += row.received;
+        if (!isDirect) { totalPaid += row.paid; overallPending += (row.received - row.paid); }
+
+        // Is ENTRY ka apna balance — sirf isi row ka received - paid (dusri rows se koi lena dena nahi)
+        // Party Direct Paid wali entry mein humare account se paisa aaya hi nahi, isliye uska balance hamesha ₹0.
+        const rowBalance = isDirect ? 0 : (row.received - row.paid);
+        const pendClass = rowBalance > 0 ? 'text-warning' : (rowBalance < 0 ? 'text-danger' : 'text-muted');
+        // A/C Name ab seedhe Received (green) amount ke neeche dikhega, taaki turant pata chale paisa kis account mein aaya
+        const acLine = row.acName ? `<br><small class="text-muted">A/C: ${safeAttr(row.acName)}</small>` : '';
+
+        rowsHtml += `
+            <tr>
+                <td>${idx + 1}</td>
+                <td>${row.date}</td>
+                <td>
+                    ${row.vNo ? `<b>${safeAttr(row.vNo)}</b><br>` : ''}<small class="text-muted">${row.from || ''} ${row.to ? '→ ' + row.to : ''}</small>
+                </td>
+                <td class="text-end text-success">${row.received ? '₹' + row.received.toLocaleString('en-IN') : ''}${acLine}</td>
+                <td><small>${safeAttr(row.paidTo || '')}</small></td>
+                <td class="text-end text-danger">${row.paid ? '₹' + row.paid.toLocaleString('en-IN') : ''}${isDirect ? '<br><span class="badge bg-warning text-dark">Party Direct Paid</span>' : ''}</td>
+                <td class="text-end fw-bold ${pendClass}">₹${Math.abs(rowBalance).toLocaleString('en-IN')}</td>
+                <td class="text-end text-nowrap">
+                    <i class="bi bi-pencil-square text-primary me-2" style="cursor:pointer;" onclick='startAdvanceEdit(${row.rowNumber})'></i>
+                    <i class="bi bi-trash text-danger" style="cursor:pointer;" onclick="deleteAdvanceEntry(${row.rowNumber})"></i>
+                </td>
+            </tr>`;
+    });
+
+    tbody.innerHTML = rowsHtml || '<tr><td colspan="8" class="text-center p-3 text-muted">Is party ki koi entry nahi hai. Neeche se add karein.</td></tr>';
+
+    document.getElementById('advTotalReceived').innerText = "₹" + totalReceived.toLocaleString('en-IN');
+    document.getElementById('advTotalPaid').innerText = "₹" + totalPaid.toLocaleString('en-IN');
+    document.getElementById('advPendingBal').innerText = "₹" + Math.abs(overallPending).toLocaleString('en-IN') + (overallPending > 0 ? ' (Dena Baaki)' : overallPending < 0 ? ' (Extra Paid)' : ' (Clear)');
+}
+
+// Is party ki entries ke andar hi search karna (vehicle / paid to)
+function filterAdvanceRows() {
+    const val = document.getElementById('advSearch').value.toUpperCase();
+    if (!val) { renderAdvanceRows(currentAdvanceEntries); return; }
+    const filtered = currentAdvanceEntries.filter(row =>
+        String(row.vNo || '').toUpperCase().includes(val) ||
+        String(row.paidTo || '').toUpperCase().includes(val) ||
+        String(row.from || '').toUpperCase().includes(val) ||
+        String(row.to || '').toUpperCase().includes(val)
+    );
+    renderAdvanceRows(filtered);
+}
+
+// Nayi entry add karna, YA edit mode mein ho to update karna
+async function addAdvanceEntry() {
+    if (!currentAdvanceParty) { alert("Pehle party select karein (jaise SMT)!"); return; }
+
+    const date = document.getElementById('advDate').value;
+    const vNo = document.getElementById('advVNo').value;
+    const drNo = document.getElementById('advDrNo').value;
+    const acName = document.getElementById('advAcName').value;
+    const from = document.getElementById('advFrom').value;
+    const to = document.getElementById('advTo').value;
+    const received = document.getElementById('advReceived').value;
+    const paidTo = document.getElementById('advPaidTo').value;
+    const paid = document.getElementById('advPaid').value;
+    const remark = document.getElementById('advRemark').value;
+    const editRow = document.getElementById('advEditRow').value;
+
+    if (!date) { alert("Date select karein!"); return; }
+    if (!received && !paid) { alert("Received ya Paid mein se koi ek amount daalein!"); return; }
+
+    const btn = document.getElementById('advAddBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> SAVING...';
+
+    const payload = {
+        action: editRow ? "updateAdvanceEntry" : "addAdvanceEntry",
+        rowNumber: editRow,
+        date: date,
+        party: currentAdvanceParty,
+        vNo: vNo,
+        drNo: drNo,
+        acName: acName,
+        from: from,
+        to: to,
+        received: received || 0,
+        paidTo: paidTo,
+        paid: paid || 0,
+        remark: remark
+    };
+
+    try {
+        await fetch(scriptURL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
+        cancelAdvanceEdit();
+        await refreshAdvanceTable();
+    } catch (e) {
+        alert("Entry save nahi ho saki. Internet check karein.");
+    }
+    btn.disabled = false;
+}
+
+// Ek entry ko edit mode mein kholna (form mein values bhar dena)
+function startAdvanceEdit(rowNumber) {
+    const row = currentAdvanceEntries.find(r => r.rowNumber === rowNumber);
+    if (!row) return;
+
+    document.getElementById('advEditRow').value = rowNumber;
+    document.getElementById('advVNo').value = row.vNo || '';
+    document.getElementById('advDrNo').value = row.drNo || '';
+    document.getElementById('advAcName').value = row.acName || '';
+    document.getElementById('advFrom').value = row.from || '';
+    document.getElementById('advTo').value = row.to || '';
+    document.getElementById('advReceived').value = row.received || '';
+    document.getElementById('advPaidTo').value = row.paidTo || '';
+    document.getElementById('advPaid').value = row.paid || '';
+    document.getElementById('advRemark').value = row.remark || '';
+    const parsedDate = new Date(row.date);
+    if (!isNaN(parsedDate.getTime())) {
+        document.getElementById('advDate').value = parsedDate.toISOString().split('T')[0];
+    }
+
+    document.getElementById('advFormTitle').innerHTML = '<i class="bi bi-pencil-square text-danger me-1"></i>Edit Entry';
+    document.getElementById('advAddBtn').innerHTML = '<i class="bi bi-check-circle me-1"></i> Update Entry';
+    document.getElementById('advCancelEditBtn').classList.remove('hidden');
+    document.getElementById('advDate').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// Edit mode cancel karke wapas "New Entry" par aana
+function cancelAdvanceEdit() {
+    document.getElementById('advEditRow').value = '';
+    document.getElementById('advVNo').value = '';
+    document.getElementById('advDrNo').value = '';
+    document.getElementById('advAcName').value = '';
+    document.getElementById('advFrom').value = '';
+    document.getElementById('advTo').value = '';
+    document.getElementById('advReceived').value = '';
+    document.getElementById('advPaidTo').value = '';
+    document.getElementById('advPaid').value = '';
+    document.getElementById('advRemark').value = '';
+    document.getElementById('advTripSelectArea').classList.add('hidden');
+    document.getElementById('advFormTitle').innerHTML = '<i class="bi bi-plus-circle text-danger me-1"></i>New Entry';
+    document.getElementById('advAddBtn').innerHTML = '<i class="bi bi-check-circle me-1"></i> Add Entry';
+    document.getElementById('advCancelEditBtn').classList.add('hidden');
+}
+
+// Ek entry delete karna
+async function deleteAdvanceEntry(rowNumber) {
+    if (!confirm("Kya aap ye entry delete karna chahte hain?")) return;
+    try {
+        await fetch(scriptURL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: "deleteAdvanceEntry", rowNumber: rowNumber }) });
+        await refreshAdvanceTable();
+    } catch (e) {
+        alert("Delete nahi ho saka. Internet check karein.");
+    }
+}
+
+// Party ki poori advance ledger ka ek printable PDF (HTML) banata hai — export aur share dono isi ko reuse karte hain
+function buildAdvancePdfElement() {
+    let totalReceived = 0, totalPaid = 0, overallPending = 0, rowsHtml = "";
+    currentAdvanceEntries.forEach((row, idx) => {
+        const isDirect = (row.received === 0 && row.paid > 0);
+        totalReceived += row.received;
+        if (!isDirect) { totalPaid += row.paid; overallPending += (row.received - row.paid); }
+        const rowBalance = isDirect ? 0 : (row.received - row.paid);
+
+        rowsHtml += `
+            <tr>
+                <td style="padding:6px;border:1px solid #ddd;">${idx + 1}</td>
+                <td style="padding:6px;border:1px solid #ddd;">${row.date}</td>
+                <td style="padding:6px;border:1px solid #ddd;">${row.vNo ? `<b>${row.vNo}</b><br>` : ''}<span style="font-size:10px;color:#666;">${row.from || ''} ${row.to ? '→ ' + row.to : ''}</span></td>
+                <td style="padding:6px;border:1px solid #ddd;">${row.acName || '-'}</td>
+                <td style="padding:6px;border:1px solid #ddd;text-align:right;color:#1a7a3c;">${row.received ? '₹' + row.received.toLocaleString('en-IN') : '-'}</td>
+                <td style="padding:6px;border:1px solid #ddd;">${row.paidTo || '-'}</td>
+                <td style="padding:6px;border:1px solid #ddd;text-align:right;color:#c0392b;">${row.paid ? '₹' + row.paid.toLocaleString('en-IN') : '-'}${isDirect ? '<br><span style="font-size:9px;background:#f1c40f;padding:1px 4px;border-radius:3px;">DIRECT PAID</span>' : ''}</td>
+                <td style="padding:6px;border:1px solid #ddd;text-align:right;font-weight:bold;">₹${Math.abs(rowBalance).toLocaleString('en-IN')}</td>
+            </tr>`;
+    });
+
+    const pendingText = overallPending > 0 ? `₹${overallPending.toLocaleString('en-IN')} (DENA BAAKI)` : overallPending < 0 ? `₹${Math.abs(overallPending).toLocaleString('en-IN')} (EXTRA PAID)` : '₹0 (CLEAR)';
+
+    const html = `
+        <div style="font-family: Arial, sans-serif; width:750px; padding:20px; color:#222;">
+            <div style="text-align:center; border-bottom:2px solid #003366; padding-bottom:10px; margin-bottom:15px;">
+                <h2 style="margin:0;color:#003366;">🏢 ATC ALLINDIA TRANSPORT</h2>
+                <div style="font-size:13px;color:#555;">Advance Payment Statement</div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:12px;font-size:13px;">
+                <div><b>Paid From (Party):</b> ${currentAdvanceParty}</div>
+                <div><b>Date:</b> ${new Date().toLocaleDateString('en-IN')}</div>
+            </div>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                <thead>
+                    <tr style="background:#003366;color:white;">
+                        <th style="padding:6px;border:1px solid #ddd;">#</th>
+                        <th style="padding:6px;border:1px solid #ddd;">Date</th>
+                        <th style="padding:6px;border:1px solid #ddd;">Vehicle/Route</th>
+                        <th style="padding:6px;border:1px solid #ddd;">A/C Name</th>
+                        <th style="padding:6px;border:1px solid #ddd;">Received</th>
+                        <th style="padding:6px;border:1px solid #ddd;">Paid To</th>
+                        <th style="padding:6px;border:1px solid #ddd;">Paid</th>
+                        <th style="padding:6px;border:1px solid #ddd;">Balance</th>
+                    </tr>
+                </thead>
+                <tbody>${rowsHtml}</tbody>
+            </table>
+            <div style="margin-top:15px;border-top:1px solid #ccc;padding-top:10px;font-size:13px;">
+                <div><b>Total Received:</b> ₹${totalReceived.toLocaleString('en-IN')}</div>
+                <div><b>Total Paid Out:</b> ₹${totalPaid.toLocaleString('en-IN')}</div>
+                <div style="font-weight:bold;color:#b30000;margin-top:5px;">PENDING: ${pendingText}</div>
+            </div>
+        </div>`;
+
+    const container = document.createElement('div');
+    container.style.background = '#ffffff';
+    container.style.width = '750px';
+    container.innerHTML = html;
+    document.body.appendChild(container);
+
+    const opt = {
+        margin: 5,
+        filename: `Advance_${currentAdvanceParty}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+    return { container, opt };
+}
+
+// Party ka poora advance statement ab PDF banakar WhatsApp (ya jo bhi share sheet available ho) se bhejna
+async function shareAdvanceStatement() {
+    if (!currentAdvanceParty || currentAdvanceEntries.length === 0) { alert("Is party ki koi entry nahi hai."); return; }
+    const overlay = showPdfGeneratingOverlay();
+    const { container, opt } = buildAdvancePdfElement();
+    try {
+        const worker = html2pdf().set(opt).from(container);
+        const blob = await worker.outputPdf('blob');
+        document.body.removeChild(container);
+        hidePdfGeneratingOverlay(overlay);
+        await sharePdfOrDownload(blob, opt.filename);
+    } catch (e) {
+        if (container.parentNode) document.body.removeChild(container);
+        hidePdfGeneratingOverlay(overlay);
+        alert("PDF banane mein dikkat aayi.");
+    }
+}
+
+// Party ki advance ledger ab PDF file mein export/download hogi (pehle CSV thi)
+async function exportAdvanceCSV() {
+    if (!currentAdvanceParty || currentAdvanceEntries.length === 0) { alert("Export karne ke liye koi entry nahi hai."); return; }
+    const overlay = showPdfGeneratingOverlay();
+    const { container, opt } = buildAdvancePdfElement();
+    try {
+        await html2pdf().set(opt).from(container).save();
+    } finally {
+        if (container.parentNode) document.body.removeChild(container);
+        hidePdfGeneratingOverlay(overlay);
+    }
+}
+// ================= END ADVANCE PAYMENT LEDGER =================
+
+// ================= "WHAT'S NEW" UPDATE NOTIFICATION =================
+// Jab bhi app ko naye features/fixes ke saath deploy karein, TWO CHIZEIN badlein:
+//   1. Yahan APP_VERSION number badhayein (e.g. "1.1.0" -> "1.2.0")
+//   2. Uske neeche ek naya changelog entry (version + notes) add karein
+//   3. sw.js mein CACHE_NAME bhi badhayein (v1 -> v2...) taaki purana cache clear ho aur
+//      sabko turant naye files milein
+// Isse jaise hi koi user app kholega, agar unhone ye version pehle nahi dekha,
+// to unhe ek popup mein "kya naya hai" dikh jayega.
+const APP_VERSION = "1.7.2";
+const APP_CHANGELOG = [
+    {
+        version: "1.7.2",
+        notes: [
+            "🐞 REAL FIX: Statement PDF blank aane ka asli reason tha off-screen (-9999px) trick — ab bilkul purane Loading Slip PDF system jaisa normal tareeke se banega, saath mein 'Generating PDF...' overlay bhi dikhega."
+        ]
+    },
+    {
+        version: "1.7.1",
+        notes: [
+            "🐞 FIX: Advance aur Party statement PDF blank aa raha tha — ab sahi se content ke saath banega (jaise Loading Slip PDF pehle se banta tha)."
+        ]
+    },
+    {
+        version: "1.7.0",
+        notes: [
+            "📥📲 'Statement Bhejein' button ab PDF ko pehle device mein download/save karega, aur uske turant baad WhatsApp share menu bhi khol dega — dono ek saath."
+        ]
+    },
+    {
+        version: "1.6.0",
+        notes: [
+            "📄 Advance Payment aur Party Ledger dono ka 'Export' ab CSV ki jagah PDF file deta hai.",
+            "📲 'Statement Bhejein' button ab PDF file seedha WhatsApp (ya share menu) se bhejta hai — sirf text nahi."
+        ]
+    },
+    {
+        version: "1.5.0",
+        notes: [
+            "✅ Advance Payment table mein Pending column ab HAR entry ka apna alag balance dikhayega (pehle jaisa cumulative running total nahi)."
+        ]
+    },
+    {
+        version: "1.4.0",
+        notes: [
+            "🏦 Advance Payment statement mein ab Received (green) amount ke neeche saaf A/C Name dikhega — pata chalega paisa kis account mein aaya."
+        ]
+    },
+    {
+        version: "1.3.0",
+        notes: [
+            "✅ Trip select karne par ab Contact Number, From, To sahi se auto-fill honge.",
+            "🏦 A/C Name field mein ab purane accounts select ya naya type kar sakte hain.",
+            "💬 WhatsApp statement mein ab ye bhi dikhega ki paisa konse A/C mein aaya.",
+            "🧮 Agar Received khaali chhodkar seedha Paid mein amount daala (party ne khud driver ko pay kiya), to ye humare Paid/Pending calculation mein automatically nahi jodega — sirf record ke liye 'Party Direct Paid' badge ke saath dikhega.",
+            "📱 Advance form ab mobile par ek-ek column mein saaf dikhega."
+        ]
+    },
+    {
+        version: "1.2.0",
+        notes: [
+            "🚚 Advance Payment form ab behtar order mein hai: Vehicle No → Date → Contact Number → From → To.",
+            "🔍 Vehicle No type karte hi (jaise RJ) matching gadi numbers suggest honge.",
+            "📋 Gadi select karte hi uski purani trips dikhengi — select karne par Date/From/To/Contact apne aap bhar jayenge (chaho to edit bhi kar sakte ho)."
+        ]
+    },
+    {
+        version: "1.1.0",
+        notes: [
+            "🆕 Naya section: <b>Advance Payment (SMT)</b> — ab SMT jaisi party se aane wala advance aur driver/gadi-malik ko diya gaya payment ek hi jagah track kar sakte hain.",
+            "📊 Har party ka Received / Paid / Pending total ab ek nazar mein dikhega.",
+            "📄 Advance statement WhatsApp par bhejne aur CSV export karne ki suvidha bhi add hui hai.",
+            "🔔 Ab jab bhi app update hogi, aapko turant pata chal jayega ki kya naya hai (ye popup)."
+        ]
+    }
+    // Agla update yahan upar naya object add karke likhein
+];
+
+function checkForAppUpdates() {
+    const lastSeen = localStorage.getItem('atc_last_seen_version');
+    if (lastSeen === APP_VERSION) return; // Ye version pehle hi dekh chuke hain
+
+    const latest = APP_CHANGELOG.find(c => c.version === APP_VERSION);
+    const body = document.getElementById('whatsNewBody');
+    if (body) {
+        if (latest && latest.notes && latest.notes.length) {
+            body.innerHTML = `<p class="text-muted small mb-2">Version ${APP_VERSION}</p><ul class="mb-0 ps-3">${latest.notes.map(n => `<li class="mb-2">${n}</li>`).join('')}</ul>`;
+        } else {
+            body.innerHTML = `<p class="mb-0">App update ho chuki hai (Version ${APP_VERSION}). Kuch fixes aur improvements add hue hain.</p>`;
+        }
+    }
+
+    const modalEl = document.getElementById('whatsNewModal');
+    if (modalEl && window.bootstrap) {
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    }
+    localStorage.setItem('atc_last_seen_version', APP_VERSION);
+}
+
+document.addEventListener('DOMContentLoaded', checkForAppUpdates);
+// ================= END "WHAT'S NEW" UPDATE NOTIFICATION =================
 
 // --- FILTERS & HELPERS ---
 function filterTrips() {
