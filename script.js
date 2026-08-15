@@ -1,5 +1,10 @@
 let allTripsData = []; // Saara data store karne ke liye
 
+// ⚠️ EDIT KAREIN: Statement PDFs ke footer mein yehi company naam/address print hoga.
+// Yahan apna sahi naam aur pura address daal dein.
+const COMPANY_NAME = "ATC ALLINDIA TRANSPORT COMPANY";
+const COMPANY_ADDRESS = "Solapur-Dhule Road, Gut No. 102, Fatiyabad, Aurangabad (MH) 431002"; // TODO: apna asli address daalein
+
 // Jab bhi statement PDF banayein, ye ek simple full-screen "Generating PDF..." overlay dikhata hai
 // taaki neeche wala real (non-hacky) content element user ko flash na ho. Yehi wajah thi ki
 // off-screen (position:fixed/-9999px) trick se PDF blank aa raha tha — html2canvas ko element
@@ -14,6 +19,26 @@ function showPdfGeneratingOverlay() {
 }
 function hidePdfGeneratingOverlay(overlay) {
     if (overlay && overlay.parentNode) document.body.removeChild(overlay);
+}
+
+// html2pdf se PDF banane ke baad, HAR page ke neeche Company Name + Address wala footer print karta hai,
+// aur page number bhi. Ye seedhe jsPDF instance par kaam karta hai (html2pdf isi ka wrapper hai),
+// isliye export (download) aur share (blob) dono isi ek function ko reuse karte hain.
+async function generateStatementPdf(container, opt) {
+    const worker = html2pdf().set(opt).from(container).toPdf();
+    const pdf = await worker.get('pdf');
+    const pageCount = pdf.internal.getNumberOfPages();
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    for (let i = 1; i <= pageCount; i++) {
+        pdf.setPage(i);
+        pdf.setFontSize(8);
+        pdf.setTextColor(120, 120, 120);
+        pdf.text(`${COMPANY_NAME} | ${COMPANY_ADDRESS}`, pageWidth / 2, pageHeight - 6, { align: 'center' });
+        pdf.text(`Page ${i} / ${pageCount}`, pageWidth - 8, pageHeight - 6, { align: 'right' });
+    }
+    return pdf;
 }
 
 // PDF ko pehle device mein SAVE/DOWNLOAD karta hai, aur uske baad WhatsApp/share menu bhi khol deta hai —
@@ -162,6 +187,7 @@ function showSection(id) {
     if(id === 'accounts') updateAccounts();
     if(id === 'home') loadHomeRecent();
     if(id === 'vehicles') loadVehicles(); 
+    if(id === 'daily-followup') loadDailyFollowup();
     if(id === 'party-ledger') { 
         loadPartyChips(); 
         document.getElementById('ledgerViewArea').classList.add('hidden'); 
@@ -324,13 +350,62 @@ function parseSheetDate(dateStr) {
 }
 
 
+// --- WHATSAPP PHONE NUMBER FIX ---
+// Sheet mein zyaadatar numbers 10-digit (bina country code ke) hote hain, jiski wajah se
+// WhatsApp kabhi kabhi number detect nahi kar paata tha. Ye function har number ko
+// WhatsApp ke liye sahi format (91XXXXXXXXXX) mein convert karta hai.
+function formatWhatsAppPhone(phone) {
+    let digits = String(phone || "").replace(/\D/g, '');
+    digits = digits.replace(/^0+/, ''); // Agar number 0 se start hota hai (jaise 09876543210), 0 hata do
+    if (digits.length === 10) {
+        digits = '91' + digits; // Plain 10-digit Indian mobile number -> country code add karo
+    } else if (digits.length === 11 && digits.startsWith('91') === false && digits.startsWith('0')) {
+        digits = '91' + digits.slice(1);
+    }
+    return digits;
+}
+
+// --- COMMISSION MESSAGE REMINDER TRACKING ---
+// Har trip ke liye kitni baar commission message bheja gaya hai, ye localStorage mein
+// (device par hi) track karte hain, taaki 2nd/3rd baar bhejte waqt reminder strong ho jaaye.
+function getMsgSendCounts() {
+    try { return JSON.parse(localStorage.getItem('atc_msg_send_counts') || '{}'); } catch (e) { return {}; }
+}
+function saveMsgSendCounts(obj) {
+    try { localStorage.setItem('atc_msg_send_counts', JSON.stringify(obj)); } catch (e) { /* ignore */ }
+}
+function tripKeyFor(vNo, date) {
+    return `${vNo}|${date}`;
+}
+
 // WhatsApp Share
 async function shareTrip(phone, vNo, from, to, party, amt, date, material, weight) {
-    // 1. Phone number cleaning
-    let cleanPhone = String(phone || "").replace(/\D/g, '');
+    // 1. Phone number cleaning + country code fix
+    let cleanPhone = formatWhatsAppPhone(phone);
     let last10Digits = cleanPhone.slice(-10);
 
-    // 2. History Calculation with Destinations (From/To)
+    if (cleanPhone.length < 12) {
+        alert("⚠️ Ye number sahi format mein nahi hai, WhatsApp nahi khul payega. Kripya number check karein: " + phone);
+        return;
+    }
+
+    // 2. Reminder Escalation Check
+    const tripKey = tripKeyFor(vNo, date);
+    const counts = getMsgSendCounts();
+    const prevCount = counts[tripKey] || 0;
+    let reminderTag = "";
+
+    if (prevCount === 1) {
+        const proceed = confirm(`⚠️ REMINDER\n\nVehicle ${vNo} ke liye commission message pehle EK baar bheja ja chuka hai.\n\nDusra reminder bhejna hai?`);
+        if (!proceed) return;
+        reminderTag = `🔔 *REMINDER — 2nd MESSAGE*\nPichla message shaayad miss ho gaya, kripya jald commission bhej dein.\n\n`;
+    } else if (prevCount >= 2) {
+        const proceed = confirm(`🚨 STRONG REMINDER\n\nVehicle ${vNo} ke liye ye ${prevCount + 1}-va (baar) message hoga!\n\nBhejna hai?`);
+        if (!proceed) return;
+        reminderTag = `🚨🔴 *URGENT — FINAL REMINDER (Message #${prevCount + 1})*\nYe ${prevCount} baar reminder bhejne ke baad ka message hai. Kripya TURANT commission clear karein.\n\n`;
+    }
+
+    // 3. History Calculation with Destinations (From/To)
     let historyList = "";
     let oldPendingAmt = 0;
     let pendingTripsCount = 0;
@@ -366,11 +441,11 @@ async function shareTrip(phone, vNo, from, to, party, amt, date, material, weigh
     let currentAmt = parseFloat(amt || 0);
     let totalOutstanding = currentAmt + oldPendingAmt;
 
-    // 3. Message Body Design
+    // 4. Message Body Design
     let messageBody = `🏢 *ATC ALLINDIA TRANSPORT*
 _Munna Bhai & Asif Bhai_
 ==========================
-📍 *CURRENT TRIP DETAILS*
+${reminderTag}📍 *CURRENT TRIP DETAILS*
 📅 Date: ${date}
 🚚 Vehicle: *${vNo}*
 🛣️ Route: ${from} To ${to}
@@ -388,16 +463,22 @@ Current Fare: ₹${currentAmt}
 ━━━━━━━━━━━━━━━━━━
 
 💸 *PAYMENT INSTRUCTIONS*
-Commission bhej kar SS dein:
+Commission bhej kar SS dein 🙏
 📲 UPI: *8888664019*
 
 _Thank you for choosing ATC!_`;
 
-    // 4. Proper Encoding (Taki message na kate)
+    // 5. Proper Encoding (Taki message na kate)
     let encodedMsg = encodeURIComponent(messageBody);
     let whatsappURL = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedMsg}`;
 
-    // 5. Open WhatsApp
+    // 6. Is trip ko "last shared" mark karo, taaki list wapas aane par yahin scroll ho jaaye
+    localStorage.setItem('atc_last_shared_trip', tripKey);
+    // 7. Send count badhao
+    counts[tripKey] = prevCount + 1;
+    saveMsgSendCounts(counts);
+
+    // 8. Open WhatsApp
     try {
         window.location.href = whatsappURL;
     } catch (e) {
@@ -485,7 +566,7 @@ const todayFormatted = today.toLocaleDateString('en-GB'); // Ye "DD/MM/YYYY" det
 
             // TRIP CARD HTML
             container.insertAdjacentHTML('beforeend', `
-                <div class="trip-card shadow-sm ${isCollected ? 'status-collected' : 'status-pending'} mb-4">
+                <div class="trip-card shadow-sm ${isCollected ? 'status-collected' : 'status-pending'} mb-4" data-trip-key="${safeAttr(tripKeyFor(vNo, tDate))}">
                     <div class="d-flex justify-content-between align-items-start border-bottom pb-2 mb-2">
                         <div>
                             <h5 class="fw-bold mb-0 text-primary d-inline-block">${vNo}</h5>
@@ -567,6 +648,25 @@ const todayFormatted = today.toLocaleDateString('en-GB'); // Ye "DD/MM/YYYY" det
         document.getElementById('sumCount').innerText = tCount;
         document.getElementById('sumColCount').innerText = colCount;
         document.getElementById('sumPenCount').innerText = penCount;
+
+        // --- FIX: SCROLL POSITION YAAD RAKHNA ---
+        // Jab WhatsApp par msg bhejne ke baad user wapas app par aata hai aur list yahan
+        // reload hoti hai, to hum use list ke TOP par le jaane ke bajaye seedha usi
+        // trip card tak scroll kar dete hain jahan se wo pichli baar gaya tha.
+        const lastKey = localStorage.getItem('atc_last_shared_trip');
+        if (lastKey) {
+            let target = null;
+            container.querySelectorAll('[data-trip-key]').forEach(card => {
+                if (card.getAttribute('data-trip-key') === lastKey) target = card;
+            });
+            if (target) {
+                setTimeout(() => {
+                    target.scrollIntoView({ behavior: 'auto', block: 'center' });
+                    target.classList.add('trip-card-highlight');
+                    setTimeout(() => target.classList.remove('trip-card-highlight'), 1800);
+                }, 50);
+            }
+        }
 
     } catch (e) { 
         container.innerHTML = '<div class="text-center p-5 text-danger">Error loading data. Check Connection.</div>';
@@ -1073,6 +1173,10 @@ function buildLedgerPdfElement() {
 
     const html = `
         <div style="font-family: Arial, sans-serif; width:750px; padding:20px; color:#222;">
+            <style>
+                table { border-collapse: collapse; width: 100%; }
+                tr { page-break-inside: avoid; break-inside: avoid; }
+            </style>
             <div style="text-align:center; border-bottom:2px solid #003366; padding-bottom:10px; margin-bottom:15px;">
                 <h2 style="margin:0;color:#003366;">🏢 ATC ALLINDIA TRANSPORT</h2>
                 <div style="font-size:13px;color:#555;">Party Statement</div>
@@ -1094,7 +1198,7 @@ function buildLedgerPdfElement() {
                 </thead>
                 <tbody>${rowsHtml}</tbody>
             </table>
-            <div style="margin-top:15px;border-top:1px solid #ccc;padding-top:10px;font-size:13px;">
+            <div style="margin-top:15px;border-top:1px solid #ccc;padding-top:10px;font-size:13px; page-break-inside: avoid;">
                 <div><b>Total Debit:</b> ₹${totalDebit.toLocaleString('en-IN')}</div>
                 <div><b>Total Credit:</b> ₹${totalCredit.toLocaleString('en-IN')}</div>
                 <div style="font-weight:bold;color:#b30000;margin-top:5px;">BALANCE: ${balanceText}</div>
@@ -1108,11 +1212,12 @@ function buildLedgerPdfElement() {
     document.body.appendChild(container);
 
     const opt = {
-        margin: 5,
+        margin: [5, 5, 14, 5], // neeche zyada margin taaki footer ke liye jagah bache
         filename: `Ledger_${currentLedgerParty}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true, logging: false },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['css', 'legacy'] } // rows/blocks page ke beech mein na tootein
     };
     return { container, opt };
 }
@@ -1123,10 +1228,10 @@ async function shareLedgerStatement() {
     const overlay = showPdfGeneratingOverlay();
     const { container, opt } = buildLedgerPdfElement();
     try {
-        const worker = html2pdf().set(opt).from(container);
-        const blob = await worker.outputPdf('blob');
+        const pdf = await generateStatementPdf(container, opt);
         document.body.removeChild(container);
         hidePdfGeneratingOverlay(overlay);
+        const blob = pdf.output('blob');
         await sharePdfOrDownload(blob, opt.filename);
     } catch (e) {
         if (container.parentNode) document.body.removeChild(container);
@@ -1141,7 +1246,8 @@ async function exportLedgerCSV() {
     const overlay = showPdfGeneratingOverlay();
     const { container, opt } = buildLedgerPdfElement();
     try {
-        await html2pdf().set(opt).from(container).save();
+        const pdf = await generateStatementPdf(container, opt);
+        pdf.save(opt.filename);
     } finally {
         if (container.parentNode) document.body.removeChild(container);
         hidePdfGeneratingOverlay(overlay);
@@ -1487,6 +1593,10 @@ function buildAdvancePdfElement() {
 
     const html = `
         <div style="font-family: Arial, sans-serif; width:750px; padding:20px; color:#222;">
+            <style>
+                table { border-collapse: collapse; width: 100%; }
+                tr { page-break-inside: avoid; break-inside: avoid; }
+            </style>
             <div style="text-align:center; border-bottom:2px solid #003366; padding-bottom:10px; margin-bottom:15px;">
                 <h2 style="margin:0;color:#003366;">🏢 ATC ALLINDIA TRANSPORT</h2>
                 <div style="font-size:13px;color:#555;">Advance Payment Statement</div>
@@ -1510,7 +1620,7 @@ function buildAdvancePdfElement() {
                 </thead>
                 <tbody>${rowsHtml}</tbody>
             </table>
-            <div style="margin-top:15px;border-top:1px solid #ccc;padding-top:10px;font-size:13px;">
+            <div style="margin-top:15px;border-top:1px solid #ccc;padding-top:10px;font-size:13px; page-break-inside: avoid;">
                 <div><b>Total Received:</b> ₹${totalReceived.toLocaleString('en-IN')}</div>
                 <div><b>Total Paid Out:</b> ₹${totalPaid.toLocaleString('en-IN')}</div>
                 <div style="font-weight:bold;color:#b30000;margin-top:5px;">PENDING: ${pendingText}</div>
@@ -1524,11 +1634,12 @@ function buildAdvancePdfElement() {
     document.body.appendChild(container);
 
     const opt = {
-        margin: 5,
+        margin: [5, 5, 14, 5], // neeche zyada margin taaki footer ke liye jagah bache
         filename: `Advance_${currentAdvanceParty}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true, logging: false },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['css', 'legacy'] } // rows/blocks page ke beech mein na tootein
     };
     return { container, opt };
 }
@@ -1539,10 +1650,10 @@ async function shareAdvanceStatement() {
     const overlay = showPdfGeneratingOverlay();
     const { container, opt } = buildAdvancePdfElement();
     try {
-        const worker = html2pdf().set(opt).from(container);
-        const blob = await worker.outputPdf('blob');
+        const pdf = await generateStatementPdf(container, opt);
         document.body.removeChild(container);
         hidePdfGeneratingOverlay(overlay);
+        const blob = pdf.output('blob');
         await sharePdfOrDownload(blob, opt.filename);
     } catch (e) {
         if (container.parentNode) document.body.removeChild(container);
@@ -1557,7 +1668,8 @@ async function exportAdvanceCSV() {
     const overlay = showPdfGeneratingOverlay();
     const { container, opt } = buildAdvancePdfElement();
     try {
-        await html2pdf().set(opt).from(container).save();
+        const pdf = await generateStatementPdf(container, opt);
+        pdf.save(opt.filename);
     } finally {
         if (container.parentNode) document.body.removeChild(container);
         hidePdfGeneratingOverlay(overlay);
@@ -1573,8 +1685,38 @@ async function exportAdvanceCSV() {
 //      sabko turant naye files milein
 // Isse jaise hi koi user app kholega, agar unhone ye version pehle nahi dekha,
 // to unhe ek popup mein "kya naya hai" dikh jayega.
-const APP_VERSION = "1.7.2";
+const APP_VERSION = "1.10.0";
 const APP_CHANGELOG = [
+    {
+        version: "1.10.0",
+        notes: [
+            "📲 WhatsApp commission message ab thoda behtar/professional design hua hai.",
+            "🔔 Ab agar kisi trip ke liye commission message pehle bhi bheja ja chuka ho, to 2nd baar bhejte waqt REMINDER aur 3rd+ baar bhejte waqt STRONG/URGENT reminder confirm hoke jaayega.",
+            "📍 View All Trips: WhatsApp bhejne ke baad wapas list par aane par ab TOP par nahi, balki usi trip card tak seedha scroll ho jayega jahan se aap gaye the.",
+            "🐞 FIX: 10-digit numbers ab WhatsApp par automatically country code (91) ke saath khulenge — 'number detect nahi hota' wali dikkat theek ho gayi."
+        ]
+    },
+    {
+        version: "1.9.1",
+        notes: [
+            "🐞 FIX: Beelty PDF generate karte waqt 'jsPDFCtor is not a constructor' error aa raha tha — theek kar diya gaya."
+        ]
+    },
+    {
+        version: "1.9.0",
+        notes: [
+            "🐞 FIX: Loading Slip (Beelty) PDF mein beech mein aa rahi 'Review — Print Se Pehle Check Karein' patti hata di gayi.",
+            "🐞 FIX: Beelty PDF ab hamesha SIRF EK PAGE ka banega — faltu/khaali dusra page ab nahi aayega.",
+            "🐞 FIX: Beelty ke neeche ka hissa (footer/signature) ab overlap/clip nahi hoga, alignment theek kar diya gaya hai."
+        ]
+    },
+    {
+        version: "1.8.0",
+        notes: [
+            "📄 Statement PDF ke har page ke neeche ab Company Name + Address wala footer aur page number dikhega.",
+            "🐞 FIX: Table rows ab page break ke beech mein nahi tootenge — pehle jo row 2 pages mein split hokar duplicate/ajeeb dikhta tha, wo theek ho gaya."
+        ]
+    },
     {
         version: "1.7.2",
         notes: [
@@ -1784,11 +1926,20 @@ function renderWizardStep() {
 
     const isReview = currentWizardStep > WIZARD_TOTAL_INPUT_STEPS;
 
+    const navBar = document.getElementById('wizardNavBar');
+
     if (isReview) {
         allSteps.forEach(el => el.classList.add('wizard-active'));
         document.getElementById('receipt-to-print').classList.remove('wizard-mode'); // sab dikhao, full preview
-        document.getElementById('wizardStepLabel').innerText = "Review — Print Se Pehle Check Karein";
+        // FIX: Review step par "Review — Print Se Pehle Check Karein" patti hata di, aur nav bar ko
+        // sticky se static kar diya (class: review-mode) taaki ye beelty ke content ke upar
+        // overlap na ho — Back button phir bhi kaam karega, bas ab neeche normal jagah par dikhega.
+        navBar.classList.add('review-mode');
+        document.getElementById('wizardStepLabel').style.display = 'none';
     } else {
+        navBar.style.display = 'block';
+        navBar.classList.remove('review-mode');
+        document.getElementById('wizardStepLabel').style.display = 'block';
         document.getElementById('receipt-to-print').classList.add('wizard-mode');
         document.querySelectorAll(`[data-wizard-step="${currentWizardStep}"]`).forEach(el => el.classList.add('wizard-active'));
         document.getElementById('wizardStepLabel').innerText = `Step ${currentWizardStep} of ${WIZARD_TOTAL_INPUT_STEPS}: ${WIZARD_TITLES[currentWizardStep - 1]}`;
@@ -1858,15 +2009,29 @@ async function generateBeeltyPDF() {
     element.classList.remove('wizard-mode');
     document.querySelectorAll('[data-wizard-step]').forEach(el => el.classList.add('wizard-active'));
 
+    // --- FIX: "Review — Print Se Pehle Check Karein" patti aur Back/Next/Submit buttons
+    // PDF mein kabhi kabhi bleed ho jaate the (sticky positioning ki wajah se). Capture se
+    // pehle inhe poori tarah hide kar dete hain taaki PDF sirf saaf beelty ho, koi UI bar nahi.
+    const navBar = document.getElementById('wizardNavBar');
+    const actionBar = document.querySelector('.slip-action-bar');
+    const navBarOriginalDisplay = navBar ? navBar.style.display : null;
+    const actionBarOriginalDisplay = actionBar ? actionBar.style.display : null;
+    if (navBar) navBar.style.display = 'none';
+    if (actionBar) actionBar.style.display = 'none';
+
     // --- FIX: MOBILE SCALING ISSUES ---
     const originalTransform = element.style.transform;
     const originalMargin = element.style.margin;
     const originalPosition = element.style.position;
+    const originalHeight = element.style.height;
 
     element.style.transform = "none"; // Scale reset to 100%
     element.style.margin = "0 auto";
     element.style.position = "relative";
     element.style.width = "794px"; // Standard A4 Width
+    // FIX: Fixed height hata kar content ke hisaab se hone dete hain, warna neeche ka
+    // content (footer/signatures) clip ya overlap ho raha tha.
+    element.style.height = "auto";
 
     const opt = {
         margin: 0,
@@ -1880,17 +2045,37 @@ async function generateBeeltyPDF() {
             scrollX: 0,
             scrollY: 0,
             width: 794
-        },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        }
     };
 
     try {
-        // PDF Generate karein
-        const pdfWorker = html2pdf().set(opt).from(element);
-        const pdfBase64 = await pdfWorker.outputPdf('datauristring').then(res => res.split(',')[1]);
-        
+        // --- FIX: EK HI PAGE KA PDF ---
+        // Pehle poore element ka canvas banate hain, phir uske exact height ke barabar
+        // ek custom-size PDF page banate hain (A4 fixed size nahi) — isse content chahe
+        // thoda lamba/chota ho, PDF hamesha SIRF EK PAGE ka banega, koi khaali/adhoora
+        // dusra page nahi aayega.
+        // NOTE: 'new jsPDF(...)' seedha use karne par "jsPDFCtor is not a constructor"
+        // error aa raha tha (global naam library load order/version ke hisaab se badal
+        // jaata hai). Isliye ab html2pdf ke apne worker chain ka hi jsPDF instance use
+        // kar rahe hain (jaisa is file mein generateStatementPdf() pehle se karta hai) —
+        // ye tareeka guaranteed available hai, global window.jsPDF par depend nahi karta.
+        const worker = html2pdf().set(opt).from(element).toCanvas();
+        const canvas = await worker.get('canvas');
+
+        const pdfWidthMM = 210; // A4 width in mm
+        const pdfHeightMM = (canvas.height * pdfWidthMM) / canvas.width;
+
+        // Worker ke jsPDF page-format ko content ke exact size jitna set kar dete hain,
+        // taaki bina kisi slicing ke sirf EK hi page bane
+        const pdf = await worker
+            .set({ jsPDF: { unit: 'mm', format: [pdfWidthMM, pdfHeightMM], orientation: 'portrait' } })
+            .toPdf()
+            .get('pdf');
+
+        const pdfBase64 = pdf.output('datauristring').split(',')[1];
+
         // Save PDF to Device
-        await pdfWorker.save();
+        pdf.save(opt.filename);
 
         // Google Sheet payload (Caps ensured)
         const payload = {
@@ -1934,6 +2119,11 @@ async function generateBeeltyPDF() {
         element.style.transform = originalTransform;
         element.style.margin = originalMargin;
         element.style.position = originalPosition;
+        element.style.height = originalHeight;
+
+        // Nav bar aur action bar wapas dikhao
+        if (navBar) navBar.style.display = navBarOriginalDisplay;
+        if (actionBar) actionBar.style.display = actionBarOriginalDisplay;
 
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-cloud-arrow-up-fill me-2"></i> FINALIZE, SAVE & WHATSAPP';
@@ -2348,6 +2538,174 @@ function safeAttr(val) {
         .replace(/&/g, "&amp;")
         .replace(/'/g, "&#39;")
         .replace(/"/g, "&quot;");
+}
+
+// ================= DAILY FOLLOW-UP (Pending Commission Roz Ka Reminder) =================
+// Saare ABHI TAK PENDING trips ko phone number ke hisaab se group karta hai (jitne bhi
+// vehicles/trips ek driver/owner ke pending hain, sab jodkar), taaki roz subah ek hi jagah se
+// sabko WhatsApp bhej sakein ya call kar sakein — bina kisi paid API/service ke.
+let _followupGroups = {};
+
+async function loadDailyFollowup() {
+    const container = document.getElementById('followupCardsContainer');
+    if (!container) return;
+    container.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary spinner-border-sm"></div><br>Pending Calculate ho raha hai...</div>';
+
+    // Agar data abhi tak load nahi hua (page turant khola ho), fresh mangwa lo
+    if (!allTripsData || allTripsData.length === 0) {
+        try {
+            const res = await fetch(scriptURL);
+            allTripsData = await res.json();
+        } catch (e) {
+            container.innerHTML = '<div class="text-center p-3 text-danger">Data load nahi ho saka. Internet check karke Refresh dabayein.</div>';
+            return;
+        }
+    }
+
+    _followupGroups = {};
+
+    allTripsData.forEach(t => {
+        const isCollected = (String(t['_colG'] || "").toLowerCase().trim() === "yes");
+        if (isCollected) return;
+
+        const amt = parseFloat(t['Amount']) || 0;
+        if (amt <= 0) return;
+
+        // Owner number ko priority do — taaki ek hi owner ki saari gaadiyan EK card mein group ho jayein.
+        // Agar owner ka number nahi hai, tabhi driver number use karo (warna wo trip kisi group mein nahi aayega).
+        const driverPhone = String(t['Driver No'] || "").replace(/\D/g, '').slice(-10);
+        const ownerPhone = String(t['_owner'] || "").replace(/\D/g, '').slice(-10);
+        const phone = ownerPhone.length === 10 ? ownerPhone : (driverPhone.length === 10 ? driverPhone : "");
+        if (!phone) return; // Bina number ke message/call nahi ja sakta
+
+        // Party Name yahan jaan-boojhkar NAHI liya — wo sirf maal bhejne wale ka naam hota hai,
+        // gaadi Owner/Driver ka nahi. Agar Owner ka naam missing ho to Driver Name par jao, warna Vehicle No dikhao.
+        const name = t['Lorry Owner Name'] || t['Driver Name'] || t['Vehicle No'];
+
+        if (!_followupGroups[phone]) {
+            _followupGroups[phone] = { phone, name, vehicles: new Set(), totalAmt: 0, oldestDate: null, trips: [] };
+        }
+        const g = _followupGroups[phone];
+        g.totalAmt += amt;
+        g.vehicles.add(t['Vehicle No']);
+        g.trips.push(t);
+
+        const d = parseSheetDate(t['Date']);
+        if (d && (!g.oldestDate || d < g.oldestDate)) g.oldestDate = d;
+    });
+
+    // Sabse zyada pending amount wale sabse upar
+    const list = Object.values(_followupGroups).sort((a, b) => b.totalAmt - a.totalAmt);
+
+    document.getElementById('followupCount').innerText = list.length;
+    document.getElementById('followupTotal').innerText = '₹' + list.reduce((s, g) => s + g.totalAmt, 0).toLocaleString('en-IN');
+
+    if (list.length === 0) {
+        container.innerHTML = '<div class="text-center p-4 text-success">🎉 Koi bhi commission pending nahi hai!</div>';
+        return;
+    }
+
+    const sentToday = getFollowupSentMap();
+    container.innerHTML = '';
+
+    list.forEach(g => {
+        const days = g.oldestDate ? Math.floor((new Date() - g.oldestDate) / 86400000) : 0;
+        const isSent = !!sentToday[g.phone];
+        const vNoList = [...g.vehicles].join(', ');
+
+        container.insertAdjacentHTML('beforeend', `
+            <div class="v-list-item shadow-sm mb-3 p-3" style="background:white;border-radius:12px;border-left:5px solid ${isSent ? '#28a745' : '#dc3545'};">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <div class="fw-bold" style="color:#003366;">${safeAttr(g.name)}</div>
+                        <small class="text-muted"><i class="bi bi-truck"></i> ${safeAttr(vNoList)}</small><br>
+                        <small class="text-muted"><i class="bi bi-clock"></i> ${days} din se pending</small>
+                    </div>
+                    <div class="text-end">
+                        <div class="fw-bold text-danger">₹${g.totalAmt.toLocaleString('en-IN')}</div>
+                        ${isSent ? '<span class="badge bg-success-subtle text-success mt-1" style="font-size:10px;">✅ Aaj bheja</span>' : ''}
+                    </div>
+                </div>
+                <div class="d-flex gap-2 mt-2">
+                    <button class="btn btn-sm btn-success flex-fill" onclick="sendFollowupWhatsapp('${g.phone}')">
+                        <i class="bi bi-whatsapp"></i> Message
+                    </button>
+                    <a href="tel:+91${g.phone}" class="btn btn-sm btn-outline-primary flex-fill" onclick="markFollowupSent('${g.phone}')">
+                        <i class="bi bi-telephone-fill"></i> Call
+                    </a>
+                </div>
+            </div>
+        `);
+    });
+}
+
+// "Aaj kisko msg/call gaya" — device ke localStorage mein track karta hai, roz naya din aate hi reset ho jaata hai
+function getFollowupSentMap() {
+    const todayKey = new Date().toLocaleDateString('en-GB');
+    try {
+        const stored = JSON.parse(localStorage.getItem('atc_followup_sent') || '{}');
+        if (stored._date !== todayKey) return {};
+        return stored;
+    } catch (e) { return {}; }
+}
+function markFollowupSent(phone) {
+    const todayKey = new Date().toLocaleDateString('en-GB');
+    let stored;
+    try { stored = JSON.parse(localStorage.getItem('atc_followup_sent') || '{}'); } catch (e) { stored = {}; }
+    if (stored._date !== todayKey) stored = { _date: todayKey };
+    stored[phone] = true;
+    localStorage.setItem('atc_followup_sent', JSON.stringify(stored));
+    loadDailyFollowup(); // List refresh taaki card green ho jaye
+}
+
+// Ek party ke SAARE pending trips jodkar ek WhatsApp message banata hai aur bhejta hai
+function sendFollowupWhatsapp(phone) {
+    const g = _followupGroups[phone];
+    if (!g) return;
+
+    const cleanPhone = formatWhatsAppPhone(phone);
+    if (cleanPhone.length < 12) {
+        alert("⚠️ Ye number sahi format mein nahi hai: " + phone);
+        return;
+    }
+
+    let historyList = "";
+    g.trips.forEach(t => {
+        const v = String(t['Vehicle No'] || "").replace(/&/g, "and");
+        const f = String(t['From'] || "N/A").replace(/&/g, "and");
+        const rt = String(t['To'] || "N/A").replace(/&/g, "and");
+        const a = parseFloat(t['Amount'] || 0);
+        const dt = t['Date'] || "No Date";
+        historyList += `▪️ *${v}* (${dt})\n   📍 ${f} ➔ ${rt}\n   💰 Fare: ₹${a}\n\n`;
+    });
+
+    const messageBody = `🏢 *ATC ALLINDIA TRANSPORT*
+==========================
+🔔 *DAILY COMMISSION REMINDER*
+
+Namaste ${g.name},
+Aapke naam par nimnlikhit trips ka commission abhi tak PENDING hai:
+
+--------------------------
+${historyList}--------------------------
+
+🛑 *TOTAL PENDING: ₹${g.totalAmt.toLocaleString('en-IN')}*
+
+💸 Commission bhej kar SS dein 🙏
+📲 UPI: *8888664019*
+
+_Kripya jald se jald clear karein. Dhanyawad!_`;
+
+    const encodedMsg = encodeURIComponent(messageBody);
+    const whatsappURL = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedMsg}`;
+
+    markFollowupSent(phone);
+
+    try {
+        window.location.href = whatsappURL;
+    } catch (e) {
+        window.open(whatsappURL, '_blank');
+    }
 }
 
 function formatINR(amount) {

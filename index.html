@@ -36,6 +36,7 @@
                 <a href="#" class="list-group-item p-3" onclick="showSection('home')"><i class="bi bi-house-door me-2"></i> Home</a>
                 <a href="#" class="list-group-item p-3" onclick="showSection('new-trip')"><i class="bi bi-plus-circle me-2 text-primary"></i> New Trip Entry</a>
                 <a href="#" class="list-group-item p-3" onclick="showSection('view-trips')"><i class="bi bi-truck me-2 text-warning"></i> View All Trips</a>
+                <a href="#" class="list-group-item p-3" onclick="showSection('daily-followup')"><i class="bi bi-whatsapp me-2 text-success"></i> Daily Follow-up</a>
                 <a href="#" class="list-group-item p-3" onclick="showSection('accounts')"><i class="bi bi-wallet2 me-2 text-success"></i> Hisaab-Kitaab</a>
                 <a href="#" class="list-group-item p-3" onclick="showSection('party-ledger')"><i class="bi bi-journal-bookmark-fill me-2 text-primary"></i> Party Ledger (Khata)</a>
                 <a href="#" class="list-group-item p-3" onclick="showSection('advance-ledger')"><i class="bi bi-arrow-left-right me-2 text-danger"></i> Advance Payment (SMT)</a>
@@ -658,6 +659,35 @@
     <input type="text" id="tripSearch" class="form-control mb-3 shadow-sm rounded-pill" placeholder="🔍 Search Anything..." onkeyup="filterTrips()">
     
     <div id="tripCardsContainer"></div>
+</div>
+
+<!-- DAILY FOLLOW-UP: SAARE PENDING COMMISSION WALE EK JAGAH, HIGHEST AMOUNT SABSE UPAR -->
+<div id="daily-followup-section" class="app-section hidden">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="fw-bold" style="color:#003366;"><i class="bi bi-whatsapp me-2 text-success"></i>Daily Follow-up</h4>
+        <button class="btn btn-sm btn-outline-primary" onclick="loadDailyFollowup()">🔄 Refresh</button>
+    </div>
+
+    <div class="row g-2 mb-3 text-center">
+        <div class="col-6">
+            <div class="p-2 border rounded bg-white shadow-sm">
+                <small class="text-danger fw-bold">PENDING PARTIES</small>
+                <h4 id="followupCount" class="mb-0 text-danger">0</h4>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="p-2 border rounded bg-white shadow-sm">
+                <small class="fw-bold" style="color:#003366;">TOTAL PENDING</small>
+                <h4 id="followupTotal" class="mb-0" style="color:#003366;">₹0</h4>
+            </div>
+        </div>
+    </div>
+
+    <div class="alert alert-light border small mb-3" style="font-size:12px;">
+        💡 Sabse zyada pending wale sabse upar hain. Message/Call bhej kar list <b>roz subah</b> yahin se nipta dein — ek baar bhej dene ke baad card green ho jayega.
+    </div>
+
+    <div id="followupCardsContainer"></div>
 </div>
 
  <!-- GAADI DOCUMENTS & HISTORY SECTION -->

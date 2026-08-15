@@ -1489,9 +1489,13 @@ body { background-color: #f4f7f9; font-family: 'Segoe UI', Roboto, sans-serif; }
 }
 
 /* Corporate Beelty Height Adjustment */
+/* FIX: 'height' fixed thi (1122px) jiski wajah se agar content thoda bhi zyada ho
+   jaaye (extra rows, lambi party naam, etc.) to neeche ka hissa (footer/signature)
+   cramped/overlap ho jaata tha. Ab 'min-height' use kar rahe hain — chota content A4
+   jitna hi dikhega, lekin lamba content bina overlap ke neeche badh jayega. */
 .corporate-beelty {
     width: 794px;
-    height: 1122px;
+    min-height: 1122px;
     padding: 40px 50px; /* Reduced padding slightly for better fit */
     background: white;
     display: flex;
@@ -1785,6 +1789,15 @@ body { background-color: #f4f7f9; font-family: 'Segoe UI', Roboto, sans-serif; }
     padding: 8px 12px;
     box-shadow: 0 -2px 8px rgba(0,0,0,0.08);
 }
+
+/* FIX: Review step par nav bar ko sticky se static kar dete hain, taaki ye lambi
+   beelty ke content ke upar overlap na ho (jo pehle "beech mein patti" wali problem thi). */
+.wizard-nav-bar.review-mode {
+    position: static;
+    box-shadow: none;
+    border-top: none;
+    margin-top: 16px;
+}
 .wizard-step-label {
     text-align: center;
     font-size: 12px;
@@ -1819,4 +1832,12 @@ body { background-color: #f4f7f9; font-family: 'Segoe UI', Roboto, sans-serif; }
 #receipt-to-print.wizard-mode .c-header,
 #receipt-to-print.wizard-mode .watermark-container {
     display: none;
+}
+/* --- SCROLL-BACK HIGHLIGHT (View All Trips) --- */
+/* Jab list reload hokar pichli baar wali trip card tak auto-scroll hoti hai,
+   thodi der ke liye ise highlight karte hain taaki user ko turant pata chale
+   "yahi wo entry hai jahan se main gaya tha". */
+.trip-card-highlight {
+    box-shadow: 0 0 0 3px #003366, 0 5px 15px rgba(0,0,0,0.15) !important;
+    transition: box-shadow 0.3s ease;
 }
